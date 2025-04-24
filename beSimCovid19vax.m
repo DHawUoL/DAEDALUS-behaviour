@@ -79,18 +79,18 @@ if solvetype==2
             pr.rhohat(i)=1;
             %}
             %%BH:
-            if i<4%********
+            if i<4%******** 2 for initial fit, <4 for full fit
                 propsBi=zeros(5,1);
             else
                 propsBi=be.propsB(:,i);%BH be.propsB(:,i)=propsBi;
             end
                 %}
 
-            if i>6
+            if tvec(i)>=183%183%i>32%17%******** 1 for initial fit, 4 for full fit 14
                 be.alphaB=be.alphaB2;%Overwrite - used in Dvec=
             end
         
-            if i>12
+            if i>100%12
                 be.alphaB=be.alphaB3;%Overwrite - used in **
             end
 
@@ -99,7 +99,7 @@ if solvetype==2
             NNvecHold(:,i)=kron(NNvec(:,i),ones(2,1)).*pOrderi;
             pOrder(:,i)=pOrderi;
             D=pr.betamod(i)*beMakeDs(NNvec(:,i),Xit(:,i),data,data.wfhAv(i,:),be,propsBi);
-
+            
         end
         %}
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -107,14 +107,14 @@ if solvetype==2
         %
         %Delta variant
         %
-        if i==17 
+        if tvec(i)>=487 && tvec(i-1)<487 %i==17
             %Overwrite once:
             beta=beta+.5*pr.betaAddOn;%del=1 always
             pr.h=pr.hDelta;
             pr.g2=pr.g2Delta;
             pr.g3=pr.g3Delta;
             pr.mu=pr.muDelta;
-        elseif i==18
+        elseif tvec(i)>487 %i==18
             beta=beta+.5*pr.betaAddOn;
         end
         %}
@@ -189,8 +189,10 @@ if solvetype==2
             % - assumes 2 behaviour groups
             
             %Fitting link function:
-            %{
-            if i<3%********
+            %
+
+
+            if i<3%******** 3 for main model 2 for initial fit
                 propsBi=zeros(5,1);
             else %Already have i<lt-1
                 %
@@ -198,18 +200,22 @@ if solvetype==2
                 Hx2=sum(HnewAll(end,:));
                 Hx3=Hx1-sum(Hout(end-13,:));
                 %propsBi=beFeedback2([Hx1,Hx2,Hx3],pr)*ones(5,1);%ones(5,1);%Feedback function
-                propsBi=beFeedback2(pr.xfull(:,i+1)',pr)*ones(5,1);%ones(5,1);
-                %
-                %propsBi=be.BiFirstFit*ones(5,1);
+                propsBi=beFeedback2([pr.xfull(:,i+1)',Hx1/1e5],pr)*ones(5,1);%ones(5,1);
+                %propsBi=beFeedback2([pr.xfull(:,i+1)'],pr)*ones(5,1);%ones(5,1);
+                %}
+                %propsBi=be.BiFirstFit*ones(5,1);%******** Line for initial fit
             end
+
+            
             %}
             %Fitting individual p's:
+            %{
             if i<3%********
                 propsBi=zeros(5,1);
             else
                 propsBi=pr.xfull(i+1)*ones(5,1);
             end
-
+            %}
             be.propsB(:,i+1)=propsBi;
 
             beDiff=be.propsB(:,i+1)-be.propsB(:,i);%From risk to risk averse
@@ -297,7 +303,7 @@ elseif hospInc==1%****
     g=hospIncOut;
     g(toutAll<1,:)=[];
 
-   rhohat=pr.rhohat;%pr.Hout; pr.rhohat;
+   rhohat=be.propsB(1,:);%pr.rhohat;%pr.Hout; pr.rhohat;
     
 elseif hospInc==2
     
@@ -311,6 +317,7 @@ end
 
 function f=beFeedback2(H,pr)
 f=pr.L1/(1+exp(dot(pr.k1,H)-pr.H01'));
+%f=pr.L1*normcdf(dot(pr.k1,H)-pr.H01');
 end
 
 %%

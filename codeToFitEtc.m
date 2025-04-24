@@ -78,6 +78,40 @@ x=x(:,[1,2,5])';%R0 fixed/range; 1st 3 shouldnt matter
 0.3065    0.65    0.7154   -3   -4  -14  -80 - manual
 0.0023    0.5672    0.5679  -19.0766   -4.6897   -6.4059  -49.7466 %String, gov resp, school closures
 
+%Stringency:
+x=stringencyDates;%cols 1 & last 2
+x(2:end,4)=diff(x(:,2));
+x2=x(x(:,4)>1,:);%Absolute chnge
+x2=x(abs(x(:,3))>.05,:);%Relative change
+
+x2=x172;
+x2(:,1)=x2(:,1)+14;
+x2=x2(x2(:,1)>=98,1:2);%83; 98 for c1_c7_2above
+x2=x2(x2(:,1)<=487,1:2);
+tvec=[1,32,61,x2(:,1)'];
+tvec(4)=92;%Check length
+xString=[0,0,0,x2(1:end-1,2)'/100];
+
+x2=x172;
+x2=x2(x2(:,1)>=84,1:2);
+x2=x2(x2(:,1)<=487,1:2);
+tvec=[1,32,61,x2(:,1)'];
+tvec(4)=92;%Check length
+xString=[0,0,0,x2(1:end-1,2)'/100];
+
+plot(xdata,[fun([0.63    0.3    0.95   .0    .12   -01.6  -18],xdata);ydata'])
+xin2prod26=xin12prod23(2:3,:);
+
+%Tweaked:
+%alpha change, phi2, tlag, R0, t0, tvec(4)
+
+[poptim,Ypred,delta,resnorm]=beFitEpiFull(dataAdmissions,ones(1,size(xString,2)),dataUK2,[0.3,.9,-.5,.74],xString,ones(1,1)');
+
+%Multiple stringency indices:
+[poptim,Ypred,delta,resnorm]=beFitEpiFull(dataAdmissions,ones(1,size(xin126,2)),dataUK2,[poptim],xin126,ones(1,3)');
+%Stringency and occ:
+[poptim6,Ypred,delta,resnorm]=beFitEpiFull(dataAdmissions,ones(1,size(xinprod26(3,:),2)),dataUK2,[0.4    .9    0.8    0.017   -0.013   -0.03   14],xinprod26(3,:),ones(1,2)');
+
 %Bayesian:
 [xsto, outsto, history, accept_rate,covmat]=beFitEpiBayesian(dataAdmissions,ones(1,size(X,2)-2),dataUK1,poptim,x,ones(1,3)');
 bePlotBayesianFitEpi(dataAdmissions,ones(1,size(X,2)-2),dataAdmissions,ones(1,size(X,2)-2),xsto,x,ones(1,3)',poptim);
@@ -86,6 +120,17 @@ x=stringToJuly21';
 bePlotBayesianFitEpi(dataAdmissions,ones(1,size(x,2)),dataUK1,xsto1b,x,ones(1,1)',poptim1);
 x=stringToJan22(:,1)';
 bePlotBayesianFitEpi(dataAdmissionsExtended,ones(1,size(x,2)),dataUK1,xsto1b,x,ones(1,1)',poptim1);
+
+%x6(10,2)=x6(9,2);
+%x6(14,2)=x6(13,2);
+%xin67=[zeros(3,2);x67(2:end,2:3)];
+
+%{
+Try:
+Shorter fitting interval
+Different x's
+
+%}
 
 %Fitting individual p's:
 [poptim,Ypred,delta,resnorm]=beFitEpiFull(dataAdmissionsExtended,ones(1,size(x,2)),dataUK1,[.2,.5*ones(1,32)],x,1);
@@ -98,4 +143,40 @@ Notes for talk:
 Take out March, switch at date calibrated
 %Fix R0, switch at end of March
 Epi info not enough - c.f. November lockdown 
+
+Notes for refining:
+Initial fit
 %}
+
+%
+%Prepping VA/string table:
+
+datasettruststringencyjul24 - table, 1/20-1/22
+rename tabString
+monthlygdptablesjan2022S19 - 1/20-4/20
+rename - tabGVA1
+monthlygdptablesjan2022S19 - 5/20-1/22
+rename - tabGVA2
+
+dataMat=[[table2array(tabGVA1{:,3:end});table2array(tabGVA1{:,3:end})],tabString{:,3:end}];
+dataTab=table2array(dataMat);
+dataTab.Properties.VariableNames=[tabGVA1.Properties.VariableNames(3:end),tabString.Properties.VariableNames(3:end)];
+
+xinabc=[dataMat(:,[47])/100,dataMat(:,[57])]';
+xinabc(2,1:2)=0;
+xinabc=[[0;0],xinabc];
+
+xinabc2=[dataMat(:,[47])/100]';
+xinabc(2,1:2)=0;
+xinabc=[[0;0],xinabc];
+%
+%2x indices, H:
+xinabc=[dataMat(:,[47])/100,dataMat(:,[57])]';
+xinabc(2,1:2)=0;
+xinabc=[[0;0],xinabc];
+[poptimxs2,Ypred,delta,resnorm]=beFitEpiFull(dataAdmissions,ones(1,size(xinabc,2)),dataUK2,[xstoxs(end,1:end-1)],xinabc,ones(1,3)');
+[xstoxs, outsto, history, accept_rate,covmat]=beFitEpiBayesian(dataAdmissions,ones(1,size(xinabc,2)),dataUK2,[xstoxs(end,1:end-1)],xinabc,ones(1,3)');
+bePlotBayesianFitEpi(dataAdmissionsExtended,ones(1,size(xinabc,2)),dataUK2,xstoxs,xinabc,ones(1,3)',[poptim3]);
+
+plot([indexgrocery{:,4}+100,indexretail{:,4}+100])
+xretail=indexretail;

@@ -28,8 +28,8 @@ ydata=ydata(0+(1:length(xdata)));
 x0=thetaIn;
 %
 %R0, t0, t1, alpha, p1:
-lb=[1.5,-200,85,0,0];%zeros(1,lx-2)];
-ub=[3.5,0,120,1,1];%zeros(1,lx-2)];
+lb=[1.8,-210,85,0,0];%zeros(1,lx-2)];
+ub=[2.2,-180,120,1,1];%zeros(1,lx-2)];
 %}
 %
 %alpha, p's:
@@ -53,13 +53,14 @@ ub=[1,20*ones(1,numPCA),100];
 
 %%
 fun=@(params,xdata)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2);
+plot(xdata,[fun(thetaIn,xdata);ydata'])
 %
 tic
 rng default;%for reproducibility
 options=optimoptions(@lsqcurvefit,'MaxFunctionEvaluations',1e2,'MaxIterations',1e2);
 problem=createOptimProblem('lsqcurvefit','x0',x0,'objective',fun,'xdata',xdata,'ydata',ydata','lb',lb,'ub',ub,'options',options);
 ms=MultiStart;
-[poptim,resnorm]=run(ms,problem,500);
+[poptim,resnorm]=run(ms,problem,10);
 toc
 Ypred=1;%sim2fit(poptim,data,xdata,X,thetaIn,intrinsic,Xfull);
 delta=1;
@@ -108,7 +109,7 @@ if intrinsic==1
     %Fit to admissions:
     %%BH [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec(1:numInt+1),0,data);
     be.BiFirstFit=params(5);
-    [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec,10,data);
+    [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec,0,data);
 else
     %Fit to ocupancy:
     %[simu,~,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);

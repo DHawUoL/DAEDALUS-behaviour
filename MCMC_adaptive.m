@@ -14,7 +14,8 @@
 
 function [xsto, outsto, history, accept_rate,covmat] = MCMC_adaptive(F, x0, n, sigma, fixinds, blockind, displ)
 
-d = length(x0); b = 0.05; sd = sigma*2.4^2/d;
+%d = length(x0); b = 0.05; sd = sigma*2.4^2/d; %DH commented out
+d = length(x0); b = 0.05; sd = sigma*2.4^2/d; %DH added to change b etc.
 if ~isempty(fixinds)
     inds = fixinds(1,:); vals = fixinds(2,:);
 else
@@ -41,7 +42,7 @@ for t = 2:n
     X = xsto(:,t-1);
     
     % --- Make a proposal from the distribution
-    Y0 = mvnrnd(X,0.1^2*cov0*sigma/d);
+    Y0 = mvnrnd(X,cov0*0.1^2*sigma/d);%0.1^2*
     if t < 2*d
         %Y = max(Y0,0);%DH: commented out
         Y = Y0;%DH: replacement line
@@ -49,10 +50,20 @@ for t = 2:n
     else
         ind0 = 1; ind1 = t-1;
         covmat = cov(xsto(:,ind0:ind1)');
+        %{
+        if t < 200 %DH added this loop
+            covmat = eye(d);  % or small fixed matrix
+        else
+            covmat = cov(xsto(:,1:t-1)');
+        end
+        %}
+        epsilon = 1e-6;  % small positive value %DH added line
+        covmat = covmat + epsilon * eye(size(covmat)); %DH added line
+
         covmat(inds,:) = 0; covmat(:,inds) = 0;
         covmat(1:blockind,(blockind+1:end)) = 0; covmat((blockind+1):end,1:blockind) = 0;
         % Need to modify this bit so it goes recursively - faster
-        
+
         % Precaution to make sure values don't get negative
         %Y = max((1-b)*mvnrnd(X,sd*covmat) + b*Y0,0);%DH: commented out
         Y = (1-b)*mvnrnd(X,sd*covmat) + b*Y0;%DH: replacement line
