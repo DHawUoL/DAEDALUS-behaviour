@@ -1,4 +1,5 @@
 function [poptim,Ypred,delta,resnorm]=beFitEpiFull(ydata,X,data,thetaIn,Xfull,coeff)
+hlag=0;
 %% Parameters to fit:
 %R0, t0 - while no mitigation
 %alpha, explicit p's (as previous deltas)
@@ -14,7 +15,7 @@ if projection==1
     %monthStart=cumsum(monthDur);
     %tvec=monthStart;
     %tvec=tvec(1:26);
-    tvec=[1    32    61    92   107   169   176   223   227   230   250   258   265   271   279   294   310   322   330   338   349   370   384    407   418   433   445   463   474   491   504   517   540   561   567   575   594   605   617   631   642   652   661   679   693   702    716   742   784];
+    tvec=[1    32    61    93   107   169   176   223   227   230   250   258   265   271   279   294   310   322   330   338   349   370   384    407   418   433   445   463   474   491   504   517   540   561   567   575   594   605   617   631   642   652   661   679   693   702    716   742   784];
     %tvec(4)=95;
     xdata=85:763;
 else
@@ -26,8 +27,11 @@ else
     %tvec(4)=95;
     xdata=85:tvec(17);%578;
     %}
-    
-    tvec=[1,2,61,93,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
+    %Footfall:
+    %tvec=[1,2,61,94,[134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575]+hlag];
+    %Stringency:
+    tvec=[1,2,61,94,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
+
     xdata=85:tvec(end-7);%-2
 end
 lt=length(tvec);
@@ -43,8 +47,8 @@ ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 x0=thetaIn;
 
 %Fitting link function:
-lb=[.1,.5,-5,-5,-5,-20];%a,a,m,k,k,k,h0 poptim5
-ub=[.7,1,5,5,10,20];
+lb=[.001,.5,1,-40,1,-5];%a,a,m,k,k,k,h0 poptim5
+ub=[.7,1,100,-1,40,50];
 
 
 %Fitting individual p's:
@@ -53,8 +57,11 @@ ub=[.7,1,5,5,10,20];
 %ub([7,8,10])=.35;
 
 %%
+weights = 1 ./ (1 + ydata');  % Prevents division by 0
 fun=@(params,xdata)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2);
-fun2=@(params)(sum((fun(params,xdata)-ydata').^2));
+
+%fun2=@(params)(sum((fun(params,xdata)-ydata').^2));
+fun2 = @(params) sum(weights .* (fun(params,xdata) - ydata').^2);
 plot(xdata,[fun(thetaIn,xdata);ydata'])
 %
 tic
@@ -63,7 +70,7 @@ rng default;%for reproducibility
 options=optimoptions(@lsqcurvefit,'MaxFunctionEvaluations',1e4,'MaxIterations',1e4);
 problem=createOptimProblem('lsqcurvefit','x0',x0,'objective',fun,'xdata',xdata,'ydata',ydata','lb',lb,'ub',ub,'options',options);
 ms=MultiStart;
-[poptim,resnorm]=run(ms,problem,1);
+[poptim,resnorm]=run(ms,problem,10);
 %}
 %poptim=ga(fun2,length(x0),[],[],[],[],lb,ub);
 %resnorm=NaN;
@@ -98,13 +105,14 @@ title('Model Fit');
 end
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
-R0=2.75;%1.9;%2.75;%params(1);
-tvec(1)=-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
+R0=2.2;%1.9;%2.75;%params(1);
+tvec(1)=-145;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
 alpha=params([1,1,1]);
 %tvec(5:end)=tvec(5:end)+params(end);
 %BH
 %Fitting link function:
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),params(2:end),coeff,zeros(5,lx2),alpha);
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end)],coeff,zeros(5,lx2),alpha);
+%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end),0.8036*params(3)-0.3232],coeff,zeros(5,lx2),alpha);
 %Interaction term:
 pr.xfull=Xfull;
 %Fitting individual p's:

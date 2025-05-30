@@ -1,6 +1,6 @@
-%function [xsto, outsto, history, accept_rate,covmat]=beFitEpiBayesian(ydata,X,data,thetaIn,Xfull,coeff)
-function [x_all, x_final, acc_rates]=beFitEpiBayesian(ydata,X,data,thetaIn,Xfull,coeff)
-
+function [xsto, outsto, history, accept_rate,covmat]=beFitEpiBayesian(ydata,X,data,thetaIn,Xfull,coeff)
+%function [x_all, x_final, acc_rates]=beFitEpiBayesian(ydata,X,data,thetaIn,Xfull,coeff)
+hlag=0;
 %% Parameters to fit:
 %R0, t0 - while no mitigation
 %alpha, explicit p's (as previous deltas)
@@ -30,8 +30,13 @@ xdata=85:tvec(17);%578;
 %}
 %
 %tvec=[1    32    61    92   107   169   176   223   227   230   250   258   265   271   279   294   310   322   330   338   349   370   384    407   418   433   445   463   474   491   504   517   540   561   567   575];%   594   605   617   631   642   652   661   679   693   702    716   742   784
-tvec=[1,2,61,93,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
-xdata=85:tvec(end-7);%-2
+%tvec=[1,2,61,93,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
+%Footfall:
+%tvec=[1,2,61,94,[134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575]+hlag];
+%Stringency:
+tvec=[1,2,61,94,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
+
+xdata=85:tvec(end-15);%-2 -7
 %}
 lt=length(tvec);
 X=X(:,1:lt-1);
@@ -46,18 +51,18 @@ ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 x0=[thetaIn];%,.3];
 
 %Fitting link function:
-lb=[.1,.5,-10,-10,-10,-50,0];%a,a,m,k,k,k,h0 poptim5
-ub=[.7,1,20,20,20,50,.4];
+lb=[.01,.3,1,-40,1,-50,.001];%a,a,m,k,k,k,h0 poptim5
+ub=[.7,1,100,-1,40,50,.1];
 
-expandFactor=.25;
-lb(2)=x0(2)*(1-expandFactor); ub(2)=x0(2)*(1+expandFactor);
-lb(3)=x0(3)*(1-expandFactor); ub(3)=x0(3)*(1+expandFactor);
-lb(6)=x0(6)*(1-expandFactor); ub(6)=x0(6)*(1+expandFactor);
+%expandFactor=.25;
+%lb(2)=x0(2)*(1-expandFactor); ub(2)=x0(2)*(1+expandFactor);
+%lb(3)=x0(3)*(1-expandFactor); ub(3)=x0(3)*(1+expandFactor);
+%lb(6)=x0(6)*(1-expandFactor); ub(6)=x0(6)*(1+expandFactor);
 
 plim=[ub;lb];
 
-n=5e3;
-sigma=1;
+n=5e4;
+sigma=.5;
 fixinds=[];
 blockind=[];
 displ=false;
@@ -65,8 +70,8 @@ displ=false;
 F=@(params)lhood1(params,data,xdata,ydata,X,intrinsic,Xfull,coeff,tvec,plim,lx1,lx2);
 tStart = tic;
 fixinds = [];%[2,3,6; x0([2,3,6])];
-%[xsto, outsto, history, accept_rate,covmat] = MCMC_adaptive(F, x0, n, sigma, fixinds, blockind, displ);
-%
+[xsto, outsto, history, accept_rate,covmat] = MCMC_adaptive(F, x0, n, sigma, fixinds, blockind, displ);
+%{
 blockList = {
     [1,2];  % Most promising movers
     [3,6];    % Still stuck
@@ -91,29 +96,33 @@ end
 %% LIKELIHOOD %%
 
 function f=lhood1(params,data,xdata,ydata,Xfit,intrinsic,Xfull,coeff,tvec,plim,lx1,lx2)
-k=.005;
-x0=5e2;
+k=.003;
+x0=50;
 w=@(x)(1/(1+exp(-k*(x-x0))));
 overdisp=params(end);
 
 ymodel=sim2fit(params(1:end-1),data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2);%(1:end-1)
-ymodel=max(ymodel,1);
-lhood=(1-arrayfun(w,ymodel)).*log(normpdf(ydata',ymodel,sqrt(ymodel+ymodel.^2*overdisp)))+arrayfun(w,ymodel).*log(normpdf(ydata',ymodel,sqrt(ymodel)));
-
+ymodel=max(ymodel,50);
+%lhood=(1-arrayfun(w,ymodel)).*log(normpdf(ydata',ymodel,sqrt(ymodel+ymodel.^2*overdisp)))+arrayfun(w,ymodel).*log(normpdf(ydata',ymodel,sqrt(ymodel)));
+wvec=arrayfun(w,ymodel);
+logL_P=log(normpdf(ydata',ymodel,sqrt(ymodel)));
+logL_NB=log(normpdf(ydata',ymodel,sqrt(ymodel+ymodel.^2*overdisp)));
+lhood = log((1 - wvec) .* exp(logL_NB) + wvec .* exp(logL_P)); %NB low
+%lhood = log((1 - wvec) .* exp(logL_P) + wvec .* exp(logL_NB)); %NB high
 %{
 df = 4;
 sd=sqrt(ymodel);
 resid = (ydata' - ymodel) ./ sd;
 lhood = log(tpdf(resid, df)) - log(sd);
 %}
-f = .01*sum(lhood) + sum(log(unif(params, plim)));
+f = sum(lhood) + sum(log(unif(params, plim)));
 end
 
 %% SIMULATION %%
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
-R0=2.75;%1.9;%2.75;%params(1);
-tvec(1)=-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
+R0=2.2;%2.75;%1.9;%2.75;%params(1);
+tvec(1)=-145;%-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
 alpha=params([1,1,1]);
 %tvec(5:end)=tvec(5:end)+params(end);
 %BH

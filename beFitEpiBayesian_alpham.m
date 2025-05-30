@@ -1,18 +1,23 @@
-function [xsto, outsto, history, accept_rate,covmat]=beFitEpiBayesian(ydata,X,data,thetaIn,Xfull,coeff)
+function [xsto, outsto, history, accept_rate,covmat]=beFitEpiBayesian_alpham(ydata,X,data,thetaIn,Xfull,coeff)
 %function [x_all, x_final, acc_rates]=beFitEpiBayesian_alpham(ydata,X,data,thetaIn,Xfull,coeff)
 
-a=.2293;%Also hard-coded in sim2fit
-b=.6942;
+%{
+a=.6121;%Also hard-coded in sim2fit
+b=.5987;
 if a > 0
     alpha_min = -b / a;
     alpha_max = (1 - b) / a;
-    alpha_max=max(alpha_max,1);
+    alpha_max=min(alpha_max,1);
+    alpha_min=max(alpha_min,.01);
 else
     alpha_min = (1 - b) / a;
     alpha_max = -b / a;
-    alpha_min=min(alpha_min,1);
+    alpha_min=max(alpha_min,.01);
+    alpha_max=min(alpha_max,1);
 end
-
+%}
+alpha_min=.01;
+alpha_max=.7;
 
 %% Parameters to fit:
 %R0, t0 - while no mitigation
@@ -23,8 +28,12 @@ intrinsic=1;%=1 for behaviour as feed in fully open economy for "original" DAEDA
 numPCA=size(coeff,1);%Number of x's in logistic regression, including H
 
 %%
-tvec=[1,2,61,92,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
-xdata=85:tvec(end-7);%-2
+%Footfall:
+%tvec=[1,2,61,94,[134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575]+hlag];
+%Stringency:
+tvec=[1,2,61,94,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
+
+xdata=85:tvec(end-15);%-2 -7
 %}
 lt=length(tvec);
 X=X(:,1:lt-1);
@@ -39,8 +48,11 @@ ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 x0=thetaIn;%[thetaIn([1,3:length(thetaIn)])];%Remove m
 
 %Fitting link function:
-lb=[alpha_min,-10,-10,-10,-50,0];%a,a,m,k,k,k,h0 poptim5
-ub=[alpha_max,20,20,20,50,.4];
+%lb=[alpha_min,.1,-100,0];%a,a,m,k,k,k,h0 poptim5
+%ub=[alpha_max,10,-1,.4];
+%Fitting link function:
+lb=[alpha_min,.1,-5,0,0];%a,a,m,k,k,k,h0 poptim5
+ub=[alpha_max,5,-.01,2,20];
 
 %expandFactor=.25;
 %lb(2)=x0(2)*(1-expandFactor); ub(2)=x0(2)*(1+expandFactor);%Was 3
@@ -48,8 +60,8 @@ ub=[alpha_max,20,20,20,50,.4];
 
 plim=[ub;lb];
 
-n=5e3;
-sigma=.2;
+n=5e4;
+sigma=1;
 fixinds=[];
 blockind=[];
 displ=false;
@@ -60,11 +72,12 @@ fixinds = [];%6;%[2,3,6; x0([2,3,6])];
 [xsto, outsto, history, accept_rate,covmat] = MCMC_adaptive(F, x0, n, sigma, fixinds, blockind, displ);
 %{
 blockList = {
-    [2 3 6];  % Most promising movers
+    [1];  % Most promising movers
     [1];    % Still stuck
-    [4 5];    % Not moving, low risk
+    [3,4];    % Not moving, low risk
+    [5]
 };
-sigmas = [.5, 0.5, 1.0];  % must match length(blockList)
+sigmas = [1,1,.1,1];  % must match length(blockList)
 
 % MCMC settings
 sigma = 1;
@@ -97,23 +110,23 @@ sd=sqrt(ymodel);
 resid = (ydata' - ymodel) ./ sd;
 lhood = log(tpdf(resid, df)) - log(sd);
 %}
-f = .01*sum(lhood) + sum(log(unif(params, plim)));
+f = .001*sum(lhood) + sum(log(unif(params, plim)));
 end
 
 %% SIMULATION %%
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
 
-a=.2293;%Also hard-coded in sim2fit
-b=.6942;
+%a=.6121;%Also hard-coded in sim2fit
+%b=.5987;
 
-R0=2.75;%1.9;%2.75;%params(1);
-tvec(1)=-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
+R0=2.2;%2.75;%1.9;%2.75;%params(1);
+tvec(1)=-145;%-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
 alpha=params([1,1,1]);
 %tvec(5:end)=tvec(5:end)+params(end);
 %BH
 %Fitting link function:
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[a*params(1)+b,params(2:end)],coeff,zeros(5,lx2),alpha);
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2),15.914-16.408*params(2),params(3),,params(4:end)],coeff,zeros(5,lx2),alpha);
 pr.xfull=Xfull;
 
 Wfit=Xfit.^(1/pr.a);

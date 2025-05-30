@@ -90,7 +90,7 @@ if feedbackIn==1
     pr.L1=forFeedback(1);%0.4;
     %
     pr.k1=forFeedback(2:2+numPCA-1)';%(2);%.0005;
-    pr.H01=forFeedback(numPCA+2);%(3);%1e4;
+    pr.H01=forFeedback(numPCA+2);%(3);%1e4; %XX param reduction
     %pr.m1=forFeedback(numPCA+3);
     %}
     %pr.betamatrix=reshape(forFeedback,5,3);

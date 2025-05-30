@@ -1,6 +1,6 @@
 function [a,b]=alpham(xsto)
 burn=500;
-alpha_samples=xsto(burn+1:end,1);
+alpha_samples=xsto(burn+1:end,1); %Second index is parameter
 m_samples=xsto(burn+1:end,2);
 [coeff, score, ~] = pca([alpha_samples, m_samples]);
 % Direction vector of PC1

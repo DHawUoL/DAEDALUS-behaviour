@@ -4,16 +4,18 @@ function [poptim,Ypred,delta,resnorm]=beFitEpiFull_alpham(ydata,X,data,thetaIn,X
 %alpha, explicit p's (as previous deltas)
 %alpha, logistic parameters
 
-a=.2293;%Also hard-coded in sim2fit
-b=.6942;
+a=.6121;%Also hard-coded in sim2fit
+b=.5987;
 if a > 0
     alpha_min = -b / a;
     alpha_max = (1 - b) / a;
-    alpha_max=max(alpha_max,1);
+    alpha_max=min(alpha_max,1);
+    alpha_min=max(alpha_min,.01);
 else
     alpha_min = (1 - b) / a;
     alpha_max = -b / a;
-    alpha_min=min(alpha_min,1);
+    alpha_min=max(alpha_min,.01);
+    alpha_max=min(alpha_max,1);
 end
 
 intrinsic=1;%=1 for behaviour as feed in fully open economy for "original" DAEDALUS
@@ -52,12 +54,11 @@ ydata=ydata(0+(1:length(xdata)));
 %If data is just England:
 ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 
-x0=thetaIn([1,3:length(thetaIn)]); %alpham
+x0=thetaIn;%([1,3:length(thetaIn)]); %alpham
 
 %Fitting link function:
-lb=[alpha_min,-5,-5,-5,-20];%a,a,m,k,k,k,h0 poptim5
-ub=[alpha_max,5,5,10,20];
-
+lb=[alpha_min,.1,-5,0.05];%a,a,m,k,k,k,h0 poptim5
+ub=[alpha_max,5,-.1,10];
 
 %Fitting individual p's:
 %lb=zeros(1,lt-2);
@@ -110,8 +111,8 @@ title('Model Fit');
 end
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
-a=.2293;%Also hard-coded in sim2fit
-b=.6942;
+a=.6121;%Also hard-coded in sim2fit
+b=.5987;
 
 R0=2.75;%1.9;%2.75;%params(1);
 tvec(1)=-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
@@ -119,7 +120,7 @@ alpha=params([1,1,1]);
 %tvec(5:end)=tvec(5:end)+params(end);
 %BH
 %Fitting link function:
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[a*params(1)+b,params(2:end)],coeff,zeros(5,lx2),alpha);
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[a*params(1)+b,params(2:end),0.8036*params(2)-0.3232],coeff,zeros(5,lx2),alpha);
 pr.xfull=Xfull;
 
 Wfit=Xfit.^(1/pr.a);

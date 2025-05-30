@@ -4,14 +4,14 @@ addmodifier=0;
 intrinsic=1;
 nx=size(coeff,1);%Number of x's in logistic regression, including H
 Xmu=mean(Xfull,2);
-projection=1;
+projection=0;
 timeThresh=17;%17 end of April 21; 20 end of July 21
 %%
 if projection==1
-    tvec=[1,2,61,92,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
+    tvec=[1,2,61,91,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
     xdata=85:tvec(end);%-2
 else
-    tvec=[1,2,61,92,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
+    tvec=[1,2,61,91,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
     xdata=85:tvec(end-7);%-2
 end
 lt=length(tvec);
@@ -24,21 +24,21 @@ ydata=ydata(0+(1:length(xdata)));
 %If data is just England:
 %ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 %If data is just England:
-%ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
+ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 %%
-burn=1e3;
+burn=2.5e3;
 numit=size(xsto,1);
-int=floor((numit-burn)/50);
+int=floor((numit-burn)/5);
 sample=xsto(burn:int:end,:);
 l1=size(sample,1);
 
 fun=@(params,Xfullin)sim2fit(params,data,xdata,X,intrinsic,Xfullin,coeff,tvec,lx1,lx2);
-y1=fun(sample(1,:),Xfull);
+y1=fun(sample(1,1:end-1),Xfull);
 l2=length(y1);
 plotmat=zeros(l1,l2);
 plotmat(1,:)=y1;
 for i=2:l1
-    plotmat(i,:)=fun(sample(i,:),Xfull);
+    plotmat(i,:)=fun(sample(i,1:end-1),Xfull);
 end
 %%
 reduction=(.05:.05:.5);
@@ -53,7 +53,7 @@ for i=1:lr
     Xfulli(1,from:end)=Xfulli(1,from:end)*reduction(i);
     plotmati=zeros(l1,l2);
     for j=1:l1
-        plotmati(j,:)=fun(sample(j,:),Xfulli);
+        plotmati(j,:)=fun(sample(j,1:end-1),Xfulli);
     end
     plotmatset{i}=plotmati;
     maxvals(i+1)=max(max(plotmati));
@@ -63,7 +63,7 @@ plotmatboth=zeros(l1,l2);
 Xfullboth=Xfull;
 Xfullboth(:,from:end)=Xfullboth(:,from:end)*.95;
 for i=1:l1
-    plotmatboth(i,:)=fun(sample(i,:),Xfullboth);
+    plotmatboth(i,:)=fun(sample(i,1:end-1),Xfullboth);
 end
 maxvals(end)=max(max(plotmati));
 
@@ -130,30 +130,49 @@ ylabel('Hospital Admissions/5k');
 end
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
+
+a=.6121;%Also hard-coded in sim2fit
+b=.5987;
+
 R0=2.75;%1.9;%2.75;%params(1);
-tvec(1)=-84;%-70;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
+tvec(1)=-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
 alpha=params([1,1,1]);
 %tvec(5:end)=tvec(5:end)+params(end);
 %BH
 %Fitting link function:
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),params(2:end),coeff,zeros(5,lx2),alpha);
-%Interaction term:
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[a*params(1)+b,params(2:end),0.8036*params(2)-0.3232],coeff,zeros(5,lx2),alpha);
 pr.xfull=Xfull;
-%Fitting individual p's:
-%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,size(Xfull,2)-2),ones(1,3),1,zeros(5,lx2),alpha);%repmat([1,1,params(2:end)]
-%pr.xfull=[1,1,1,params(2:end)];%Use xfull as the value of p
-
 
 Wfit=Xfit.^(1/pr.a);
 if intrinsic==1
+    %Fit to admissions:
+    %%BH
     %Fitting link function:
     [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),0,data);
+    %Fitting individual p's:
+    %[simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),0,data);
+
 else
+    %Fit to ocupancy:
+    %[simu,~,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
+    %Fit to admissions:
     [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
 end
 t=simu(:,1)';
+
+%Fit to ocupancy:
+%h=simu(:,4)';
+%Fit to admissions:
 h=simu2';
+
 f=interp1(t,h,xdata); 
+
+%plot(simu(:,1),simu2);
+%plot(xdata,f)
+
+%f(isinf(f))=-1e6;
+%f(isnan(f))=-1e6;
+
 end
 
 function f=rho2ofh(H,pr)

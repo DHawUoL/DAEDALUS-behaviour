@@ -2,6 +2,7 @@ function [f,g,tvec,rhohat]=beSimCovid19vax(pr,be,vx,beta,tvec,Xit,ntot,NNvec,phi
 
 %% PARAMETERS/MODEL TYPE:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+hlag=0;
 feedbackIn=0;%=0 for variant with behavioural groups
 lx=be.numGroups;%%BH
 NNbar=kron(NNvec(:,1),[0;1]);%%BH - NNvec stays aggregated by behavioural group
@@ -49,6 +50,7 @@ if solvetype==2
     Vout=zn';
     incOut=zn';
     hospIncOut=0;
+    hospLagOut=zeros(tvec(end)-tvec(1)+1,1);
     Rt=zeros(lt-1,1);
     
     %% FIXED INPUT:
@@ -158,6 +160,9 @@ if solvetype==2
         incOut=[incOut;incOutclass(2:end,:)];
         %Not part of y:
         hospIncOut=[hospIncOut;sum(hospIncOutclass(2:end,:),2)];
+        if tout(2)>hlag
+            hospLagOut(tout(2:end)-hlag)=sum(hospIncOutclass(2:end,:),2);
+        end
 
         Houtlast=mean(sum(Hclass,2));
         pr.Hout(i)=Houtlast;
@@ -197,10 +202,10 @@ if solvetype==2
             else %Already have i<lt-1
                 %
                 Hx1=sum(Hout(end,:));
-                Hx2=sum(HnewAll(end,:));
+                Hx2=sum(hospLagOut(tvec(i+1),:));%sum(hospIncOut(end,:));%(HnewAll(end,:));
                 Hx3=Hx1-sum(Hout(end-13,:));
                 %propsBi=beFeedback2([Hx1,Hx2,Hx3],pr)*ones(5,1);%ones(5,1);%Feedback function
-                propsBi=beFeedback2([pr.xfull(:,i+1)',Hx1/1e5],pr)*ones(5,1);%ones(5,1);
+                propsBi=beFeedback2([pr.xfull(:,i+1)',Hx2/5e3],pr)*ones(5,1);%ones(5,1);%XX param reduction - change between 2 and 3 on this line
                 %propsBi=beFeedback2([pr.xfull(:,i+1)'],pr)*ones(5,1);%ones(5,1);
                 %}
                 %propsBi=be.BiFirstFit*ones(5,1);%******** Line for initial fit
@@ -320,6 +325,11 @@ f=pr.L1/(1+exp(dot(pr.k1,H)-pr.H01'));
 %f=pr.L1*normcdf(dot(pr.k1,H)-pr.H01');
 end
 
+function f=beFeedback3(H,pr)
+f=pr.L1/(1+exp(pr.k1(1)*H(1)+pr.k1(2)*(H(2)-H(3))-pr.H01));
+%f=pr.L1*normcdf(dot(pr.k1,H)-pr.H01');
+end
+
 %%
 
 function [tout,Sclass,Hclass,Dclass,DEcum,Rcum,y0new,Hnew,Sv1class,Vclass,Iasyclass,Isymclass,Iasyvaxclass,Isymvaxclass,incidence,hospIncOut]=integr8(pr,vx,beta,ntot,NN0,NNbar,D,phi1,phi2,seedvec,t0,tend,y0,i,hospInc)
@@ -335,7 +345,11 @@ else
     [tout,yout]=ode45(fun,[t0,ceil(t0)+1:floor(tend)],y0);
 end
 %}
-[tout,yout]=ode45(fun,[t0,tend],y0);
+[tout,yout]=ode45(fun,t0:tend,y0);
+if tend-t0==1
+    tout=tout([1,length(tout)]);
+    yout=yout([1,length(tout)],:);
+end
     
      Hnew=0;
 

@@ -1,5 +1,6 @@
 function plotmat=bePlotBayesianFitEpi(ydata,X,data,xsto,Xfull,coeff,pointEst)
 %[xsto, outsto, history, accept_rate,covmat]=fitEpiBayesian(dataOcc,ones(1,19),dataUK1,[0.9058   -0.7800   -7.1241   15.4944    0.0000    0.0243],X2(4:22,:)',1);
+hlag=0;
 addmodifier=1;
 intrinsic=1;
 nx=size(coeff,1);%Number of x's in logistic regression, including H
@@ -13,7 +14,12 @@ if projection==1
     tvec=[1,2,61,93,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
     xdata=85:tvec(end);%-2
 else
-    tvec=[1,2,61,93,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
+    %tvec=[1,2,61,93,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
+    %Footfall:
+    %tvec=[1,2,61,94,[134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575]+hlag];
+    %Stringency:
+    tvec=[1,2,61,94,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
+
     xdata=85:tvec(end-7);%-2
 end
 
@@ -27,15 +33,16 @@ ydata=ydata(0+(1:length(xdata)));
 %If data is just England:
 %ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 %If data is just England:
-%ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
+ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 %%
-burn=4e3;%1e3;
+burn=2.5e4;%1e3;
 numit=size(xsto,1);
 int=floor((numit-burn)/5);%20;
-sample=xsto(burn:int:end,:);%1:end-1);
+sample=xsto(burn:int:end,1:end-1);%1:end-1);
 l1=size(sample,1);
 
 fun=@(params)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2);
+
 y1=fun(sample(1,:));
 l2=length(y1);
 plotmat=zeros(l1,l2);
@@ -140,24 +147,21 @@ ylabel('Hospital Admissions/5k');
 end
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
-R0=2.75;%1.9;%2.75;%params(1);
-tvec(1)=-84;%-70;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
+
+a=.6121;%Also hard-coded in sim2fit
+b=.5987;
+
+R0=2.2;%2.75;%1.9;%2.75;%params(1);
+tvec(1)=-145;%-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
 alpha=params([1,1,1]);
 %tvec(5:end)=tvec(5:end)+params(end);
 %BH
 %Fitting link function:
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),params(2:end),coeff,zeros(5,lx2),alpha);
-%Interaction term:
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end)],coeff,zeros(5,lx2),alpha);
 pr.xfull=Xfull;
-%Fitting individual p's:
-%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,size(Xfull,2)-2),ones(1,3),1,zeros(5,lx2),alpha);%repmat([1,1,params(2:end)]
-%pr.xfull=[1,1,1,params(2:end)];%Use xfull as the value of p
-
 
 Wfit=Xfit.^(1/pr.a);
 if intrinsic==1
-    %Fit to ocupancy:
-    %[simu,~,~]=heRunCovid19(pr,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:numInt+1),0,data);
     %Fit to admissions:
     %%BH
     %Fitting link function:
