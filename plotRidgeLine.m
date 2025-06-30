@@ -1,8 +1,8 @@
 function [a,b]=plotRidgeLine(xsto)
-burn=3e3;
+burn=2.5e3;
 xpost=xsto(burn+1:end,:);
-param_index_alpha=2;
-param_index_m=3;
+param_index_alpha=4;
+param_index_m=5;
 
 % === INPUT: posterior samples ===
 % Replace these with your actual parameter indices

@@ -1,6 +1,6 @@
 function [xsto, outsto, history, accept_rate,covmat]=beFitEpiBayesian_alpham(ydata,X,data,thetaIn,Xfull,coeff)
 %function [x_all, x_final, acc_rates]=beFitEpiBayesian_alpham(ydata,X,data,thetaIn,Xfull,coeff)
-
+hlag=0;
 %{
 a=.6121;%Also hard-coded in sim2fit
 b=.5987;
@@ -51,8 +51,11 @@ x0=thetaIn;%[thetaIn([1,3:length(thetaIn)])];%Remove m
 %lb=[alpha_min,.1,-100,0];%a,a,m,k,k,k,h0 poptim5
 %ub=[alpha_max,10,-1,.4];
 %Fitting link function:
-lb=[alpha_min,.1,-5,0,0];%a,a,m,k,k,k,h0 poptim5
-ub=[alpha_max,5,-.01,2,20];
+%lb=[alpha_min,.1,-5,0,0];%a,a,m,k,k,k,h0 poptim5
+%ub=[alpha_max,5,-.01,2,20];
+%Fitting link function:
+lb=[.01,.3,1,-40,-50,.001];%a,a,m,k,k,k,h0 poptim5
+ub=[.7,1,100,-1,50,.1];
 
 %expandFactor=.25;
 %lb(2)=x0(2)*(1-expandFactor); ub(2)=x0(2)*(1+expandFactor);%Was 3
@@ -60,7 +63,7 @@ ub=[alpha_max,5,-.01,2,20];
 
 plim=[ub;lb];
 
-n=5e4;
+n=1e5;
 sigma=1;
 fixinds=[];
 blockind=[];
@@ -95,30 +98,36 @@ end
 %% LIKELIHOOD %%
 
 function f=lhood1(params,data,xdata,ydata,Xfit,intrinsic,Xfull,coeff,tvec,plim,lx1,lx2)
-k=.005;
-x0=5e2;
-w=@(x)1;%(1/(1+exp(-k*(x-x0))));
+k=.003;
+x0=50;
+w=@(x)(1/(1+exp(-k*(x-x0))));
 overdisp=params(end);
 
 ymodel=sim2fit(params(1:end-1),data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2);%(1:end-1)
-ymodel=max(ymodel,1);
-lhood=(1-arrayfun(w,ymodel)).*log(normpdf(ydata',ymodel,sqrt(ymodel+ymodel.^2*overdisp)))+arrayfun(w,ymodel).*log(normpdf(ydata',ymodel,sqrt(ymodel)));
-
+ymodel=max(ymodel,50);
+%lhood=(1-arrayfun(w,ymodel)).*log(normpdf(ydata',ymodel,sqrt(ymodel+ymodel.^2*overdisp)))+arrayfun(w,ymodel).*log(normpdf(ydata',ymodel,sqrt(ymodel)));
+wvec=arrayfun(w,ymodel);
+logL_P=log(normpdf(ydata',ymodel,sqrt(ymodel)));
+logL_NB=log(normpdf(ydata',ymodel,sqrt(ymodel+ymodel.^2*overdisp)));
+lhood = log((1 - wvec) .* exp(logL_NB) + wvec .* exp(logL_P)); %NB low
+%lhood = log((1 - wvec) .* exp(logL_P) + wvec .* exp(logL_NB)); %NB high
 %{
 df = 4;
 sd=sqrt(ymodel);
 resid = (ydata' - ymodel) ./ sd;
 lhood = log(tpdf(resid, df)) - log(sd);
 %}
-f = .001*sum(lhood) + sum(log(unif(params, plim)));
+f = .01*sum(lhood) + sum(log(unif(params, plim)));
 end
 
 %% SIMULATION %%
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
 
-%a=.6121;%Also hard-coded in sim2fit
-%b=.5987;
+a=-0.3771;%k3=ak2+b
+b=-0.8084;
+%a=0.3948;%v0=ak2+b
+%b=2.1942;
 
 R0=2.2;%2.75;%1.9;%2.75;%params(1);
 tvec(1)=-145;%-84;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
@@ -126,7 +135,7 @@ alpha=params([1,1,1]);
 %tvec(5:end)=tvec(5:end)+params(end);
 %BH
 %Fitting link function:
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2),15.914-16.408*params(2),params(3),,params(4:end)],coeff,zeros(5,lx2),alpha);
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:4),a*params(4)+b,params(5)],coeff,zeros(5,lx2),alpha);
 pr.xfull=Xfull;
 
 Wfit=Xfit.^(1/pr.a);

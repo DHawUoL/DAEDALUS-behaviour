@@ -61,8 +61,8 @@ ub=[.7,1,100,-1,40,50,.1];
 
 plim=[ub;lb];
 
-n=5e4;
-sigma=.5;
+n=5e3;
+sigma=1;
 fixinds=[];
 blockind=[];
 displ=false;
@@ -115,7 +115,7 @@ sd=sqrt(ymodel);
 resid = (ydata' - ymodel) ./ sd;
 lhood = log(tpdf(resid, df)) - log(sd);
 %}
-f = sum(lhood) + sum(log(unif(params, plim)));
+f = .1*sum(lhood) + sum(log(unif(params, plim)));
 end
 
 %% SIMULATION %%

@@ -35,7 +35,7 @@ ydata=ydata(0+(1:length(xdata)));
 %If data is just England:
 ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 %%
-burn=2.5e4;%1e3;
+burn=1;%2.5e3;%1e3;
 numit=size(xsto,1);
 int=floor((numit-burn)/5);%20;
 sample=xsto(burn:int:end,1:end-1);%1:end-1);
@@ -68,8 +68,8 @@ if addmodifier==1
     %Periods, real H values:
     tvecPlus=[1,tvec(2:end)];
     value=zeros(1,tvec(end));%numPeriods);
-    value2=ones(1,tvec(end));
-    for i=4:lt-1%********
+    value2=pointEst(1)*ones(1,tvec(end));
+    for i=1:lt-1%******** 3:
         ti=round(tvecPlus(i)):round(tvecPlus(i+1));
         value(ti)=rhohat(i);
         %value(ti)=beFeedback2(Xfull(:,i),params);%(coeff*(Xfull(:,i)-Xmu),params); (Xfull(:,i),params)
@@ -85,9 +85,11 @@ if addmodifier==1
     %value2(round(tvec(3)):tvec(5))=mean(xsto(burn+1:end,1));
     %value2(tvec(5)+1:tvec(8))=mean(xsto(burn+1:end,1));
     %value2(tvec(8)+1:end)=mean(xsto(burn+1:end,1));
-    value2(round(tvec(4)):tvec(7))=xsto(end,1);%mean(xsto(burn+1:end,1));
-    value2(tvec(7)+1:tvec(8))=xsto(end,1);%mean(xsto(burn+1:end,1));
-    value2(tvec(8)+1:end)=xsto(end,1);%mean(xsto(burn+1:end,1));
+
+    %Alpha as last mcmc sample:
+    %value2(round(tvec(4)):tvec(7))=xsto(end,1);%mean(xsto(burn+1:end,1));
+    %value2(tvec(7)+1:tvec(8))=xsto(end,1);%mean(xsto(burn+1:end,1));
+    %value2(tvec(8)+1:end)=xsto(end,1);%mean(xsto(burn+1:end,1));
 end
 
 %% Plot:

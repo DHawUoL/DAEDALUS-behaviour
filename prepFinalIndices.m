@@ -36,17 +36,17 @@ plot([0,monthStart(end)],[0,0],'k-','linewidth',1)
 h(1)=plot(mat2(:,1),'-','linewidth',lw,'color',cmap(1,:));
 h(2)=plot(mat2(:,2),'-','linewidth',lw,'color',cmap(2,:));
 h(3)=plot(thosp,hosp,'-','linewidth',lw,'color',cmap(3,:));
-plot([0,92],[0,0],'k-','linewidth',2)
+%plot([0,92],[0,0],'k-','linewidth',2)
 plot(92*[1,1],[-1,2],'-','linewidth',lw,'color',.5*[1,1,1])
 plot(474*[1,1],[-1,2],'--','linewidth',lw,'color',.5*[1,1,1])%monthStart(20)
 xticks(monthStart(1:2:end))
 xticklabels(xlabels)
 xtickangle(45)
 set(gca,'fontsize',fs)
-axis([1,monthStart(end-1)+1,-.7,1.1])
+axis([1,monthStart(end-1)+1,0,1])
 xlabel('Time')
 ylabel('Index')
-legend(h,'% "not improving"','Restaurant footfall (% change)','Hospital admissions/5k (data)','location','SW')
+legend(h,'% "not improving"','Stringency','Hospital admissions/5k (data)','location','SE') %Restaurant footfall (% change)
 grid on
 grid minor
 box on

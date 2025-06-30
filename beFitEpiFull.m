@@ -32,7 +32,7 @@ else
     %Stringency:
     tvec=[1,2,61,94,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
 
-    xdata=85:tvec(end-7);%-2
+    xdata=85:tvec(end-15);%-2 -7
 end
 lt=length(tvec);
 X=X(:,1:lt-1);
@@ -47,7 +47,7 @@ ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 x0=thetaIn;
 
 %Fitting link function:
-lb=[.001,.5,1,-40,1,-5];%a,a,m,k,k,k,h0 poptim5
+lb=[.1,.5,1,-40,1,-5];%a,a,m,k,k,k,h0 poptim5
 ub=[.7,1,100,-1,40,50];
 
 
@@ -70,7 +70,7 @@ rng default;%for reproducibility
 options=optimoptions(@lsqcurvefit,'MaxFunctionEvaluations',1e4,'MaxIterations',1e4);
 problem=createOptimProblem('lsqcurvefit','x0',x0,'objective',fun,'xdata',xdata,'ydata',ydata','lb',lb,'ub',ub,'options',options);
 ms=MultiStart;
-[poptim,resnorm]=run(ms,problem,10);
+[poptim,resnorm]=run(ms,problem,1);
 %}
 %poptim=ga(fun2,length(x0),[],[],[],[],lb,ub);
 %resnorm=NaN;
