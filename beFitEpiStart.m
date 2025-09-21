@@ -28,33 +28,14 @@ ydata=ydata(0+(1:length(xdata)));
 x0=thetaIn;
 %
 %R0, t0, t1, alpha, p1:
-lb=[1.8,-210,85,0,0];%zeros(1,lx-2)];
-ub=[2.2,-180,120,1,1];%zeros(1,lx-2)];
-%}
-%
-%alpha, p's:
-%lb=[.2,zeros(1,16)];%zeros(1,lx-2)];
-%ub=[.5,ones(1,16)];%zeros(1,lx-2)];
-%}
-%{
-%alpha, feedback params L1, k's, H0:
-lb=[.15,.15,0,-10*ones(1,numPCA),-10];%alpha, L, kvec, H0
-ub=[.5,1,1,10*ones(1,numPCA),10];
-%lb=[.15,0,0,-20,0,-50];%alpha, L, kvec, H0
-%ub=[.5,1,20,0,20,50];
-%}
-%{
-%alpha out:
-lb=[0,-20*ones(1,numPCA),-100];%alpha, L, kvec, H0
-ub=[1,20*ones(1,numPCA),100];
-%lb=[.19,.8,-.4356,-1.1,4,-1];%alpha, L, kvec, H0
-%ub=[.21,1,-.2356,-.9,6,3];
+lb=[-210,60,.5,0,0];%zeros(1,lx-2)];
+ub=[00,120,2,1,1];%zeros(1,lx-2)];
 %}
 
 %%
 fun=@(params,xdata)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2);
 plot(xdata,[fun(thetaIn,xdata);ydata'])
-%
+%{
 tic
 rng default;%for reproducibility
 options=optimoptions(@lsqcurvefit,'MaxFunctionEvaluations',1e2,'MaxIterations',1e2);
@@ -64,7 +45,28 @@ ms=MultiStart;
 toc
 Ypred=1;%sim2fit(poptim,data,xdata,X,thetaIn,intrinsic,Xfull);
 delta=1;
-%
+%}
+
+options = optimoptions(@lsqcurvefit, ...
+    'MaxFunctionEvaluations', 5e3, ...
+    'MaxIterations',  5e3, ...
+    'StepTolerance',  1e-8, ...
+    'FunctionTolerance', 1e-8, ...
+    'FiniteDifferenceType','forward', ...   % less fragile
+    'FiniteDifferenceStepSize', 1e-3);      % don’t poke too hard
+best = inf; best_out = []; poptim=nan(1,5); resnorm=inf;
+for t0i = -90:-74
+  for t1i = 85:97
+    fun2 = @(z,xdata) sim2fit([t0i,t1i,z(1),z(2),z(3)], data, xdata, X, intrinsic, Xfull, coeff, tvec, lx1, lx2);
+    z0  = thetaIn(3:5);%[1.0, 0.5, 0.2];   % [rH, alpha, p1] starts
+    lb  = [0.4, 0.0, 0.0];   ub = [2.5, 1.0, 1.0];
+    [zhat,~,res,~] = lsqcurvefit(fun2, z0, xdata, ydata', lb, ub, options);
+    if res < best, best = res; poptim=[t0i,t1i,zhat]; resnorm=res; end %best_out = struct('t0',t0i,'t1',t1i,'z',zhat,'res',res); end
+  end
+end
+Ypred=1;
+delta=1;
+
 %%
 %Plotting
 ymod=fun(poptim,xdata);%sim2fit(poptim,data,xdata,X,thetaIn,intrinsic,Xfull,coeff,tvec,lx1,lx2);
@@ -91,38 +93,43 @@ title('Model Fit');
 end
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
-R0=params(1);
-t0=params(2);
-t1=params(3);
+R0=2.8;%params(1);
+t0=params(1);
+t1=params(2);
 tvec(1)=t0;
 tvec(3)=t1;
+propIn=params(3);
 alpha=params(4)*ones(1,3);%0.3536;%params(1);
 
-%%BH [pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,lx2,R0,[ones(1,lx2-2)],zeros(1,5),coeff,ones(5,lx2),alpha);%5=numPCA+2
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),zeros(1,5),ones(1,3)',zeros(5,lx2),alpha);
-
-pr.xfull=Xfull;
-Wfit=Xfit.^(1/pr.a);
-if intrinsic==1
+%try
+    %%BH [pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,lx2,R0,[ones(1,lx2-2)],zeros(1,5),coeff,ones(5,lx2),alpha);%5=numPCA+2
+    [pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),zeros(1,5),ones(1,3)',zeros(5,lx2),alpha,propIn);
+    pr.leak=0;
+    pr.xfull=Xfull;
+    Wfit=Xfit.^(1/pr.a);
+    if intrinsic==1
+        %Fit to ocupancy:
+        %[simu,~,~]=heRunCovid19(pr,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:numInt+1),0,data);
+        %Fit to admissions:
+        %%BH [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec(1:numInt+1),0,data);
+        be.BiFirstFit=params(5);
+        [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec,0,data);
+    else
+        %Fit to ocupancy:
+        %[simu,~,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
+        %Fit to admissions:
+        [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
+    end
+    t=simu(:,1)';
     %Fit to ocupancy:
-    %[simu,~,~]=heRunCovid19(pr,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:numInt+1),0,data);
+    %h=simu(:,4)';
     %Fit to admissions:
-    %%BH [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec(1:numInt+1),0,data);
-    be.BiFirstFit=params(5);
-    [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec,0,data);
-else
-    %Fit to ocupancy:
-    %[simu,~,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
-    %Fit to admissions:
-    [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
-end
-t=simu(:,1)';
-%Fit to ocupancy:
-%h=simu(:,4)';
-%Fit to admissions:
-h=simu2';
-
-f=interp1(t,h,xdata); 
+    h=simu2';
+    f=interp1(t,h,xdata); 
+%catch
+    % ANY failure in ODE/eigs/etc. → big finite penalty
+%    f = zeros(size(xdata)); f(:) = 1e9; rhohat = NaN;
+%end
 
 %f(isinf(f))=-1e6;
 %f(isnan(f))=-1e6;

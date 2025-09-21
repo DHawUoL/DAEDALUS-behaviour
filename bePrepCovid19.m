@@ -1,13 +1,9 @@
-function [pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,del,forFeedback,coeff,beProps,alphaIn)%%**
-%% Behaviour: default "be" created but not used (eval calculation has expandB=0)
-%% Kroenecker products of all necesary parameters and initial D done at the end - still to do
-
+function [pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,del,forFeedback,coeff,beProps,alphaIn,propIn)%%startOrFull
 %Fix vax rollout
 data.atimes=[343,367,412];
 data.arates(3)=3*data.arates(3);
 %data.arates=[];
 
-%plotSingleRun(dataOcc,ones(1,19),dataUK1,[poptimGVAstart,.2],Xin20ld,coeff(:,1:3)');
 %% MODEL TYPE:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 feedbackIn=1;
@@ -89,12 +85,8 @@ if feedbackIn==1
     %
     pr.L1=forFeedback(1);%0.4;
     %
-    pr.k1=forFeedback(2:2+numPCA-1)';%(2);%.0005;
-    pr.H01=forFeedback(numPCA+2);%(3);%1e4; %XX param reduction
-    %pr.m1=forFeedback(numPCA+3);
-    %}
-    %pr.betamatrix=reshape(forFeedback,5,3);
-    %}
+    pr.k1=forFeedback(2:2+numPCA-1)';%(2);
+    pr.H01=forFeedback(numPCA+2);%(3);
 else
     pr.L1=0;%0.4;
     pr.k1=1;%.0005;
@@ -123,14 +115,18 @@ ph=[repmat(ph(adInd),lx,1);ph];
 pd=[repmat(pd(adInd),lx,1);pd];
 
 %Hospitalisation and Death Rates (proportion and rate combined)
-Tsh=4.5;%from Global
-Thd=data.Thd;%14; %DH - as Sri Lanka
+%Tsh=4.5;%from Global
+%Thd=data.Thd;%14; %DH - as Sri Lanka
+Tsh = 4.0;  %https://www.imperial.ac.uk/mrc-global-infectious-disease-analysis/disease-areas/covid-19/report-41-rtm/
+Thd = 9.1; %https://bmcinfectdis.biomedcentral.com/articles/10.1186/s12879-021-06371-6
+
 
 %Recovery Rates (proportion and rate combined)
 Ta=2.1;%asymptomatic
 pr.g1=1/Ta;
 Ts=4;%symptomatic
-Threc=data.Threc;%hospitalised%14;
+%Threc=data.Threc;%hospitalised%14;
+Threc = 9.1; %https://bmcinfectdis.biomedcentral.com/articles/10.1186/s12879-021-06371-6
 
 %DH:
 time_symp=ph.*Tsh+(1-ph).*Ts;
@@ -167,7 +163,7 @@ GD=F/V;
 d=eigs(GD,1);%largest in magnitude (+/-) 
 R0a=max(d); 
 beta=pr.R0/R0a;%beta scales actual R0 to fitted R0
-pr.betaAddOn=beta*(5.08/2.8025-1);
+pr.betaAddOn=beta*pr.R0/5.08;%(5.08/2.8025-1);
 
 %% PREPAREDNESS PARAMETERS:
 
@@ -185,7 +181,7 @@ pr.q2=0;%severe quarantining rate
 
 
 %Hospital Capacity
-pr.Hmax=data.Hmax;%2017;
+pr.Hmax=Inf;%data.Hmax;%2017;
 
 pdoc=heParamsAge_oc(data,pr.p1);
 pdoc=[repmat(pdoc(adInd),lx,1);pdoc];
@@ -198,12 +194,12 @@ vx=struct;%from RTM unless indicated otherwise
 
 %Vaccine 1 (two doses)
 vx.hrv1=    1/28;                       %time to develop v-acquired immunity (AstraZeneca)
-vx.scv1=    0.58;                       %infection-blocking efficacy
+vx.scv1=    0.58;                       %infection-blocking efficacy https://doi.org/10.1126/sciadv.adu8678
 vx.scv1b=   0.4;                        %delta variant infection-blocking efficacy
-vx.p1v1=    0;                          %disease-blocking efficacy          
-vx.hv1=     1-((1-0.90)/(1-vx.scv1));   %severe-disease-blocking efficacy
+vx.p1v1=    0;                          %disease-blocking efficacy https://doi.org/10.1126/sciadv.adu8678          
+vx.hv1=     1-((1-0.90)/(1-vx.scv1));   %severe-disease-blocking efficacy of 90% https://doi.org/10.1126/sciadv.adu8678
 vx.dv1=     0;                          %death-blocking efficacy
-vx.trv1=    0.40;                       %transmission-blocking efficacy
+vx.trv1=    0.3;%0.40;                  %transmission-blocking efficacy, please cite ‘Intervention insights from Danish SARS-CoV-2 transmission network based on large-scale genomic surveillance and social networks’ (2025) Curran-Sebastian et al., In preparation. 
 vx.nuv1=    1/Inf;                      %duration of v-acquired immunity
 
 vx.h_v1=    (1-vx.hv1)*ph/Tsh;
@@ -211,8 +207,7 @@ vx.g2_v1=   (1-(1-vx.hv1)*ph)/Ts;
 vx.mu_v1=   (1-vx.dv1)*pd/Thd;
 vx.g3_v1=   (1-(1-vx.dv1)*pd)/Threc;
 
-% vx.mu_ocv1= 1.19*vx.mu_v1;%Wilde et al. (2021)
-% vx.g3_ocv1= (1-1.19*(1-vx.dv1)*pd)/Threc;
+
 vx.mu_ocv1=   (1-vx.dv1)*pdoc/Thd;
 vx.g3_ocv1=   (1-(1-vx.dv1)*pdoc)/Threc;
 
@@ -236,7 +231,6 @@ vx.startp5=581;
 vx.end=582;
 
 vx.aratep1=[0;0;0;0;170050];
-%vx.aratep2=[0;0;2.1296e+05;0];
 vx.aratep2=[1.6952e+05;0;0;4.3438e+04;0];
 vx.aratep3=zeros(5,1);
 vx.aratep4=zeros(5,1);
@@ -244,7 +238,6 @@ vx.aratep5=zeros(5,1);
 %}
 %% Kron for behaviour:
 kn=ones(2,1);
-%k4=ones(2,1);
 pr.g2=kron(pr.g2,kn);
 pr.h=kron(pr.h,kn);
 pr.g3=kron(pr.g3,kn);
@@ -269,6 +262,19 @@ vx.aratep2=kron(vx.aratep2,kn);
 vx.aratep3=kron(vx.aratep3,kn);
 vx.aratep4=kron(vx.aratep4,kn);
 vx.aratep5=kron(vx.aratep5,kn);
+
+%Add-in:
+% After:
+% pr.g2=(1-ph)./time_symp;  pr.h=ph./time_symp;
+% pr.g3, pr.mu already set; same for *_Delta and vax equivalents later.
+pr.rH = propIn;%1.0;   % to be estimated (start at 1). rH>1 = more hospitalisations per symptomatic.
+% helper: resplit while preserving total exit rate g2+h and non-negativity
+resplit = @(g2,h,rH) deal( max((g2+h) - max(rH.*h,0),  eps),  max(rH.*h, eps) );
+[pr.g2, pr.h] = resplit(pr.g2, pr.h, pr.rH);
+% Delta pathway:
+[pr.g2Delta, pr.hDelta] = resplit(pr.g2Delta, pr.hDelta, pr.rH);
+% Vaccinated symptomatic split (v1):
+[vx.g2_v1, vx.h_v1]     = resplit(vx.g2_v1, vx.h_v1, pr.rH);
 end
 
 function [phgs,pdgh,Threc,Thd]=heParamsAge(datax,ps)
@@ -276,7 +282,6 @@ function [phgs,pdgh,Threc,Thd]=heParamsAge(datax,ps)
 nn=datax.Npop';
 
 ranges=[1,3,9,4];
-%nntot=repelem(nn,ranges);%DH
 nnprop=repelem(1./ranges,ranges);%DH
 
 subs=1:4;
@@ -304,15 +309,22 @@ nn=datax.Npop';
 nn=datax.Npop';
 
 ranges=[1,3,9,4];
-%nntot=repelem(nn,ranges);%DH
 nnprop=repelem(1./ranges,ranges);%DH
 
 subs=1:4;
 subs=repelem(subs,ranges);
 
-ihr=    [0.030000 0.002600 0.000840	0.000420 0.000800 0.002600 0.004000	0.006300 0.012000 0.019000 0.023000	0.040000 0.096000 0.100000 0.240000	0.500000 0.500000];
+ihr = [0.000016 0.000016 0.000408 0.000408 ...  
+           0.010400 0.010400 0.034300 0.034300 ...  
+           0.042500 0.042500 0.081600 0.081600 ...  
+           0.118000 0.118000 0.166000 0.166000 0.184000]; %https://pubmed.ncbi.nlm.nih.gov/32240634/
 
-ifr=    [0.0003 0.0003 0.0002 0.0002 0.0003 0.0003 0.0009 0.0009 0.0034 0.0034 0.0073 0.0073 0.0253 0.0253 0.064 0.064 0.1325];
+
+ifr = [0.000016 0.000016 0.000070 0.000070 ...
+           0.000309 0.000309 0.000844 0.000844 ...
+           0.001610 0.001610 0.005950 0.005950 ...
+           0.019300 0.019300 0.042800 0.042800 0.078000]; %https://pubmed.ncbi.nlm.nih.gov/32240634/
+
 pdgh=   ifr./ihr;
 
 pdgh=   accumarray(subs',pdgh.*nnprop);

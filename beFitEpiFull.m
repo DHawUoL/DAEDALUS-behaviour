@@ -1,5 +1,6 @@
 function [poptim,Ypred,delta,resnorm]=beFitEpiFull(ydata,X,data,thetaIn,Xfull,coeff)
 hlag=0;
+plotRun=0;
 %% Parameters to fit:
 %R0, t0 - while no mitigation
 %alpha, explicit p's (as previous deltas)
@@ -47,8 +48,11 @@ ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 x0=thetaIn;
 
 %Fitting link function:
-lb=[.1,.5,1,-40,1,-5];%a,a,m,k,k,k,h0 poptim5
-ub=[.7,1,100,-1,40,50];
+%lb=[.1,.5,1,-40,1,-5];%a,a,m,k,k,k,h0 poptim5
+%ub=[.7,1,100,-1,40,50];
+%No m:
+lb=[0,-25,-25];%a,a,m,k,k,k,h0 poptim5
+ub=[1,25,25];
 
 
 %Fitting individual p's:
@@ -58,19 +62,48 @@ ub=[.7,1,100,-1,40,50];
 
 %%
 weights = 1 ./ (1 + ydata');  % Prevents division by 0
-fun=@(params,xdata)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2);
+fun=@(params,xdata)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2,plotRun);
 
 %fun2=@(params)(sum((fun(params,xdata)-ydata').^2));
 fun2 = @(params) sum(weights .* (fun(params,xdata) - ydata').^2);
 plot(xdata,[fun(thetaIn,xdata);ydata'])
+if plotRun==1
+    error('Careful youre not fitting')
+end
 %
 tic
 %
 rng default;%for reproducibility
 options=optimoptions(@lsqcurvefit,'MaxFunctionEvaluations',1e4,'MaxIterations',1e4);
 problem=createOptimProblem('lsqcurvefit','x0',x0,'objective',fun,'xdata',xdata,'ydata',ydata','lb',lb,'ub',ub,'options',options);
-ms=MultiStart;
-[poptim,resnorm]=run(ms,problem,1);
+%ms=MultiStart;
+%[poptim,resnorm]=run(ms,problem,10);
+
+
+ms = MultiStart('Display', 'final');  % You can also use 'iter' or 'off'
+ms.UseParallel = false;               % Set to true if you want parallelism
+[xopt, resnorm, exitflag, output, solutions] = run(ms, problem, 10);%fval/resnorm
+allX = cat(1, solutions.X);
+allFvals = [solutions.Fval]';
+% Sort and display best few
+[sortedFvals, idx] = sort(allFvals);
+disp(table(sortedFvals(1:5), allX(idx(1:5), :), 'VariableNames', {'Fval','X'}));
+figure;
+hold on;
+plot(xdata, ydata, 'ko', 'DisplayName', 'Data');
+for i = 1:min(5, numel(solutions))
+    yfit = fun(solutions(i).X, xdata);
+    plot(xdata, yfit, 'DisplayName', ['Fit ' num2str(i)]);
+end
+legend show;
+title('Fits from Multiple Local Minima');
+exitflags = [solutions.Exitflag];
+nfevals = arrayfun(@(s) s.Output.funcCount, solutions);
+tab = table(exitflags', nfevals', 'VariableNames', {'Exitflag','FuncEvals'});
+disp(tab);
+poptim=xopt;
+
+
 %}
 %poptim=ga(fun2,length(x0),[],[],[],[],lb,ub);
 %resnorm=NaN;
@@ -104,14 +137,22 @@ title('Model Fit');
 %}
 end
 
-function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2)
-R0=2.2;%1.9;%2.75;%params(1);
-tvec(1)=-145;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
+function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2,plotRun)
+R0=2.8;%2.2;
+tvec(1)=-53;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
 alpha=params([1,1,1]);
 %tvec(5:end)=tvec(5:end)+params(end);
+a1=-.814;
+b1=8.0161;
+a2=-.8067;
+b2=-8.0887;
+ks=params(2);%ksrat0=0.1613
+%reducedParams=[1,a1*ks+b1,a2*ks+b2,params(3),0];
+reducedParams=[1,ks,0,params(2),0];
 %BH
 %Fitting link function:
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end)],coeff,zeros(5,lx2),alpha);
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),reducedParams,coeff,zeros(5,lx2),alpha);
+pr.leak=0;%params(2);
 %[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end),0.8036*params(3)-0.3232],coeff,zeros(5,lx2),alpha);
 %Interaction term:
 pr.xfull=Xfull;
@@ -127,7 +168,7 @@ if intrinsic==1
     %Fit to admissions:
     %%BH
     %Fitting link function:
-    [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),0,data);
+    [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),plotRun,data);
     %Fitting individual p's:
     %[simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),0,data);
 

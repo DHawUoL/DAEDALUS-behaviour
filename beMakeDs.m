@@ -140,6 +140,8 @@ if be.expandB==1
     numD=length(D);
     %behMat=repmat([be.alphaB^2,be.alphaB;be.alphaB,1],numD,numD);
     behMat=[be.alphaB^2,be.alphaB;be.alphaB,1];
+    %behMat=[be.alphaB,be.alphaB;be.alphaB,1];
+    %behMat=[be.alphaB,sqrt(be.alphaB);sqrt(be.alphaB),1];
     pOrder=reshape([propsB';1-propsB'],2*length(propsB),1);%be.probsB has length number of age/sector compartments
     pOrder=repmat(pOrder',numD*2,1);
     
