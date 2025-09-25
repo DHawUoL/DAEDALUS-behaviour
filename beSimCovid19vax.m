@@ -54,7 +54,7 @@ for i=1:lt-1
     betaIn=beta;%Single fitted modifier - this is just a relabel of beta
     pr.rhohat(i)=1;
     %%BH:
-    if i<4%2 for initial fit, <4 for full fit
+    if i<3%2 for initial fit, <4 for full fit %%startOrFull
         propsBi=zeros(5,1);
     else
         propsBi=be.propsB(:,i);
@@ -68,7 +68,7 @@ for i=1:lt-1
     pOrderi=reshape([propsBi';1-propsBi'],ntot,1);
     NNvecHold(:,i)=kron(NNvec(:,i),ones(2,1)).*pOrderi;
     pOrder(:,i)=pOrderi;
-    D=pr.betamod(i)*beMakeDs(NNvec(:,i),Xit(:,i),data,data.wfhAv(i,:),be,propsBi)*(1-propsBi(1)*pr.leak)^2;
+    D=pr.betamod(i)*beMakeDs(NNvec(:,i),Xit(:,i),data,data.wfhAv(i,:),be,propsBi);%*(1-propsBi(1)*pr.leak)^2;
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     %Delta variant
@@ -252,8 +252,8 @@ V=      y(18*ntot+1:19*ntot);
 %% MODIFIERS B:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %phi=phi1;
-%phi=phi1+phi2*cos(pi*(t-pr.tlag)/180);%Seasonality****
-phi=exp(phi2*cos(pi*(t-pr.tlag)/180));%Seasonality****
+phi=phi1+phi2*cos(pi*(t-pr.tlag)/180);%Seasonality****
+%phi=exp(phi2*cos(pi*(t-pr.tlag)/180))/besseli(0,phi2);%Seasonality****
 beta=betaIn;
 
 %Track and trace:
@@ -263,7 +263,7 @@ redSus=1;
 foi=phi*beta.*(D*(I./NN0));
 
 if period<3
-    seed=phi*(seedvec./NN0);
+    seed=(seedvec./NN0);%phi*
 else
     seed=zeros(ntot,1);
 end

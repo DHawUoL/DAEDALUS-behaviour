@@ -1,5 +1,5 @@
-%function [f,g,tvec,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Xit,tvec,plotTau,data)%,pDeff=Dout.*repmat(NNbar,1,n*na).Xmu/repmatmodIn)
-function [f,g,tvec,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,Xit,tvec,plotTau,data)
+%function [f,g,tvec,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Xit,tvec,plotTau,data)%,pDeff=Dout.*repmat(NNbar,1,n*na).Xmu/repmatmodIn) %%startOrFull
+function [f,g,tvec,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,Xit,tvec,plotTau,data) %%startOrFull
 
 pr.Xmu=mean(Xit,2);
 
@@ -16,7 +16,7 @@ pr.Xmu=mean(Xit,2);
 
 lt=length(tvec);
 numseed=7;
-phi1=1; phi2=0;%.2;%phi2=0 for seasonality off
+phi1=1; phi2=pr.phi2;%0;%.2;%phi2=0 for seasonality off
 pr.tlag=-10;%32;%1st Feb peak
 tauend=1;
 
