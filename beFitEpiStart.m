@@ -25,13 +25,6 @@ ydata=ydata(0+(1:length(xdata)));
 %If data is just England:
 %ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 
-x0=thetaIn;
-%
-%R0, t0, t1, alpha, p1:
-lb=[-210,60,.5,0,0];%zeros(1,lx-2)];
-ub=[00,120,2,1,1];%zeros(1,lx-2)];
-%}
-
 %%
 fun=@(params,xdata)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2);
 plot(xdata,[fun(thetaIn,xdata);ydata'])
@@ -77,15 +70,15 @@ options_nl = optimoptions(@lsqnonlin, ...
 
 best_res = inf; poptim = nan(1,5); best_z = []; best_t0 = NaN; best_t1 = NaN;
 
-for t0i = -60:-50
-  for t1i = 90:96
+for t0i = -50:-50
+  for t1i = 80:100
     % objective over z = [rH, alpha, p1] with t0,t1 held fixed
-    obj = @(z) resid_peakaware_full([t0i, t1i, z(1), z(2), z(3)], ...
+    obj = @(z) resid_peakaware_full([t0i, t1i, z(1), z(2)], ...%, z(3)
                                     data, xdata, X, intrinsic, Xfull, coeff, tvec, lx1, lx2, ydata');
 
-    z0 = thetaIn(3:5);              % start for [rH, alpha, p1]
-    lb = [0, 0.0, 0.0];           % bounds for z
-    ub = [0.4, 1.0, 1.0];
+    z0 = thetaIn(3:4);              % start for [rH, alpha, p1]
+    lb = [0, 0.0];           % bounds for z
+    ub = [0.4, 1.0];
 
     % solve (single-start is usually fine here)
     [zhat,~,resnorm] = lsqnonlin(obj, z0, lb, ub, options_nl);
@@ -110,8 +103,8 @@ figure('Units','centimeters','Position',[0 0 20 20]); hold on;
 bar(xdata, ydata);
 plot(xdata, ymod, 'r-', 'LineWidth', 2.5);
 xlabel('Time'); ylabel('Hospital Occupancy'); box on; grid on; axis square;
-title(sprintf('Best t0=%d, t1=%d, rH=%.2f, alpha=%.2f, p1=%.2f', ...
-      best_t0, best_t1, best_z(1), best_z(2), best_z(3)));
+title(sprintf('Best t0=%d, t1=%d, rH=%.2f, alpha=%.2f', ... %p1=%.2f', ...
+      best_t0, best_t1, best_z(1), best_z(2)));%, best_z(3)));
 
 
 %%
@@ -145,7 +138,7 @@ function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx
     propIn = 1;%params(3);
     phi2=params(3);
     alpha  = params(4)*ones(1,3);
-    p1     = params(5);
+    p1     = 1;%params(5);
 
     % keep timeline sane
     tvec(1)=t0; tvec(3)=t1;
@@ -172,19 +165,19 @@ function r = resid_peakaware_full(params, data, xdata, Xfit, intrinsic, Xfull, c
 
     % base residuals on log-scale (helps early/late)
     eps0 = 1e-6;
-    r_ts = log(max(f,eps0)) - log(max(y,eps0));
+    r_ts = (f-y).^2;%log(max(f,eps0)) - log(max(y,eps0));
 
     % peak timing & height residuals
     [~, iyd] = max(y);  tpk_y = xdata(iyd);  hpk_y = y(iyd);
     [~, ifm] = max(f);  tpk_f = xdata(ifm);  hpk_f = f(ifm);
 
-    wt = 2.0;   % timing weight
-    wh = 1.0;   % height weight
+    wt = 0.0;   % timing weight
+    wh = 0.0;   % height weight
     r_peak_t = sqrt(wt) * (tpk_f - tpk_y);
     r_peak_h = sqrt(wh) * (log(max(hpk_f,eps0)) - log(max(hpk_y,eps0)));
 
     % extra weight near observed peak (optional)
-    sig = 7; wp = 1.5;
+    sig = 7; wp = 0.0;
     wts = 1 + wp*exp(-0.5*((xdata - tpk_y)/sig).^2);
     r_ts = sqrt(wts(:)) .* r_ts(:);
 
