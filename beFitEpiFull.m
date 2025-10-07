@@ -31,7 +31,7 @@ else
     %Footfall:
     %tvec=[1,2,61,94,[134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575]+hlag];
     %Stringency:
-    tvec=[1,2,61,90,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
+    tvec=[1,2,61,91,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
     %Was 94 before seasonality
     xdata=85:tvec(end-15);%-2 -7
 end
@@ -46,14 +46,8 @@ ydata=ydata(0+(1:length(xdata)));
 ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 
 x0=thetaIn;
-
-%Fitting link function:
-%lb=[.1,.5,1,-40,1,-5];%a,a,m,k,k,k,h0 poptim5
-%ub=[.7,1,100,-1,40,50];
-%No m:
-lb=[0,-10,-10,-10,-30];%a,a,m,k,k,k,h0 poptim5
+lb=[0,-10,-10,-10,-30];
 ub=[1,10,10,10,30];
-
 
 %Fitting individual p's:
 %lb=zeros(1,lt-2);
@@ -155,7 +149,7 @@ reducedParams=[1,params(2:end)];
 %BH
 %Fitting link function:
 [pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),reducedParams,coeff,zeros(5,lx2),alpha,propIn);
-pr.leak=0; pr.xfull=Xfull; be.BiFirstFit=1; pr.phi2=.1725;
+pr.leak=0; pr.xfull=Xfull; be.BiFirstFit=1; pr.phi2=0.1668;
 %[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end),0.8036*params(3)-0.3232],coeff,zeros(5,lx2),alpha);
 %Interaction term:
 pr.xfull=Xfull;

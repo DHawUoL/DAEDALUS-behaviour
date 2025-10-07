@@ -15,7 +15,7 @@ else
     %Footfall:
     %tvec=[1,2,61,94,[134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575]+hlag];
     %Stringency:
-    tvec=[1,2,61,94,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
+    tvec=[1,2,61,91,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
 
     xdata=85:tvec(end-7);%-2
 end
@@ -35,12 +35,6 @@ ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 fun=@(params)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2,0);
 
 %% Generate sample
-tab=[0.39381     0.0047523     0.38447      0.40316;
-0.9954    0.00061135      0.9942       0.9966;
--0.11555      0.041358    -0.19685    -0.034255;
-2.3062         0.107      2.0958       2.5165];
-pointEst=tab(:,1)';
-se=tab(:,2)';
 l1        = 200;
 %sample=drawParamSamplesx(pointEst, se, l1);
 sample=drawParamSamples(Diag, l1, struct('lb',[0 0 -25 -25], 'ub',[1 1 25 25], 'truncate','none'));
@@ -133,20 +127,24 @@ ylabel('Hospital Admissions/5k');
 end
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2,plotRun)
-R0=2.2;%1.9;%2.75;%params(1);
-tvec(1)=-145;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
+R0=2.8;%2.2;
+tvec(1)=-60;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
 alpha=params([1,1,1]);
-%tvec(5:end)=tvec(5:end)+params(end);
+propIn=1;
+%{
 a1=-.814;
 b1=8.0161;
 a2=-.8067;
 b2=-8.0887;
-ks=params(3);%ksrat0=0.1613
-reducedParams=[1,a1*ks+b1,a2*ks+b2,params(4),0];
+%}
+%ks=params(2);
+%reducedParams=[1,a1*ks+b1,a2*ks+b2,params(3),0];
+%reducedParams=[1,ks,0,params(2),0];
+reducedParams=[1,params(2:end)];%,0,params(3),0];
 %BH
 %Fitting link function:
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),reducedParams,coeff,zeros(5,lx2),alpha);
-pr.leak=params(2);
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),reducedParams,coeff,zeros(5,lx2),alpha,propIn);
+pr.leak=0; pr.xfull=Xfull; be.BiFirstFit=1; pr.phi2=0.1668;
 %[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end),0.8036*params(3)-0.3232],coeff,zeros(5,lx2),alpha);
 %Interaction term:
 pr.xfull=Xfull;

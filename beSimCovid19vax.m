@@ -51,10 +51,10 @@ for i=1:lt-1
     %% MODIFIERS:
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %*pr.betamod(i) is included in making of D's
-    betaIn=beta;%Single fitted modifier - this is just a relabel of beta
+    %betaIn=beta;%Single fitted modifier - this is just a relabel of beta
     pr.rhohat(i)=1;
     %%BH:
-    if i<3%2 for initial fit, <4 for full fit %%startOrFull
+    if i<4%3 for initial fit, <4 for full fit %%startOrFull - <2?
         propsBi=zeros(5,1);
     else
         propsBi=be.propsB(:,i);
@@ -70,7 +70,79 @@ for i=1:lt-1
     pOrder(:,i)=pOrderi;
     D=pr.betamod(i)*beMakeDs(NNvec(:,i),Xit(:,i),data,data.wfhAv(i,:),be,propsBi);%*(1-propsBi(1)*pr.leak)^2;
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %
+    %Alpha variant:
+    % --- Alpha (B.1.1.7) switch ---
+    % Choose the calendar day Alpha starts to matter in your t-scale.
+    % Dec 2020 in your timeline is ~ day 330–350; tune t_alpha as needed.
+    t_alpha = 214;          % <-- pick the takeover start you want 245=1st Sept; 275=1st Oct
+    RR_alpha  = 1.30;       % beta multiplier
+    rH_alpha  = 1.30;       % hospitalisation propensity multiplier on h
+    rMu_alpha = 1.50;       % (optional) in-hospital mortality multiplier on mu
+    %persistent alpha_applied
+    %if isempty(alpha_applied), alpha_applied = false; end
+    %
+    %if ~alpha_applied && tvec(i) >= t_alpha && tvec(i-1) < t_alpha
+        %alpha_applied = true;
+    if tvec(i) >= t_alpha && tvec(i-1) < t_alpha
+        % 1) Transmission bump
+        beta = beta * RR_alpha;
+        % 2) Admissions propensity bump (preserve g2+h total, keep non-negative)
+        resplit = @(g2,h,r) deal( max((g2+h) - max(r.*h,0), eps), max(r.*h, eps) );
+        [pr.g2, pr.h] = resplit(pr.g2, pr.h, rH_alpha);
+        % (Optional) apply same resplit to vaccinated / variant pathways if you use them pre-Delta
+        % [vx.g2_v1, vx.h_v1] = resplit(vx.g2_v1, vx.h_v1, rH_alpha);
+        % 3) Mortality bump inside hospital (preserve g3+mu total, keep non-negative)
+        if ~isempty(rMu_alpha) && rMu_alpha ~= 1
+            tot = pr.g3 + pr.mu;
+            pr.mu = max(rMu_alpha * pr.mu, eps);
+            pr.g3 = max(tot - pr.mu, eps);
+            % If you model over-capacity (oc) channels, mirror the change:
+            tot_oc = pr.g3_oc + pr.mu_oc;
+            pr.mu_oc = max(rMu_alpha * pr.mu_oc, eps);
+            pr.g3_oc = max(tot_oc - pr.mu_oc, eps);
+            % Vaccinated equivalents if needed:
+            % tot_v1 = vx.g3_v1 + vx.mu_v1;
+            % vx.mu_v1 = max(rMu_alpha * vx.mu_v1, eps);
+            % vx.g3_v1 = max(tot_v1 - vx.mu_v1, eps);
+        end
+    end
+    %}
+%{
+% --- Alpha (B.1.1.7) smooth takeover ---
+% Logistic share S_alpha(t) with midpoint t50 and width w
+% (10%->90% transition is ~2.197*w days)
+t50_alpha = 335;   % try 320–350 (late Nov – mid Dec)
+w_alpha   = 15;    % try 12–18 (=> ~26–40 day takeover)
+Salpha = 1 ./ (1 + exp(-( (tvec(i) - t50_alpha) / w_alpha )));
 
+RR_alpha  = 1.20;  % try 1.15–1.25
+rH_alpha  = 1.15;  % try 1.10–1.25
+rMu_alpha = 1.00;  % start neutral; turn on if needed
+
+% 1) Transmission multiplier
+beta = beta * (1 + (RR_alpha - 1) * Salpha);
+
+% 2) Admissions propensity: preserve g2+h total while tilting toward h
+resplit = @(g2,h,r) deal( max((g2+h) - max(r.*h,0), eps), max(r.*h, eps) );
+if rH_alpha ~= 1
+    r_eff = 1 + (rH_alpha - 1) * Salpha;
+    [pr.g2, pr.h] = resplit(pr.g2, pr.h, r_eff);
+end
+
+% 3) In-hospital mortality (optional): preserve g3+mu
+if rMu_alpha ~= 1
+    r_eff_mu = 1 + (rMu_alpha - 1) * Salpha;
+    tot = pr.g3 + pr.mu;
+    pr.mu = max(r_eff_mu * pr.mu, eps);
+    pr.g3 = max(tot - pr.mu,    eps);
+
+    % mirror for over-capacity if you use those channels
+    tot_oc = pr.g3_oc + pr.mu_oc;
+    pr.mu_oc = max(r_eff_mu * pr.mu_oc, eps);
+    pr.g3_oc = max(tot_oc - pr.mu_oc,   eps);
+end
+%}
     %Delta variant
     if tvec(i)>=487 && tvec(i-1)<487 %i==17
         %Overwrite once:
@@ -87,6 +159,8 @@ for i=1:lt-1
     NNfeed=NNvecHold(:,i);%%BH
     NNfeed(NNfeed==0)=1;%NNfeed functions as NN0, i.e. zeros changed to ones
     
+    betaIn=beta;%Single fitted modifier - this is just a relabel of beta
+
     %Vaccination Rollout by Sector
     %
     vx.ratep1period=vx.aratep1.*pOrder(:,i);%Does all vax periods - change to loop;
@@ -133,16 +207,16 @@ for i=1:lt-1
         %% Shift behavioural classes first:
         % - assumes 2 behaviour groups
         
-        if i<2%******** 3 for main model 2 for initial fit %%startOrFull
+        if i<3%******** 3 for main model 2 for initial fit %%startOrFull
             propsBi=zeros(5,1);
         else %Already have i<lt-1 %%startOrFull
-            %{
+            %
             Hx1=sum(Hout(end,:));
             Hx2=sum(hospIncOut(end,:));%sum(hospLagOut(tvec(i+1),:));%(HnewAll(end,:));
             Hx3=Hx1-sum(Hout(end-13,:));
-            propsBi=beFeedback2([pr.xfull(:,i+1)',Hx2/5e3],pr)*ones(5,1);%ones(5,1);%XX param reduction - change between 2 and 3 on this line
+            propsBi=beFeedback2([pr.xfull(:,i+1)',(Hx2-pr.ymean)/5e3],pr)*ones(5,1);%ones(5,1);%XX param reduction - change between 2 and 3 on this line
             %}
-            propsBi=be.BiFirstFit*ones(5,1);%Start
+            %propsBi=be.BiFirstFit*ones(5,1);%Start
         end  
         be.propsB(:,i+1)=propsBi;
 

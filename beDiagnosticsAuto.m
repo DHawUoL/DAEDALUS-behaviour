@@ -5,8 +5,8 @@ function Diag = beDiagnosticsAuto(ydata, X, data, pointEst, Xfull, coeff, paramN
 %% -------------------- User-editable bounds (ONE place) --------------------
 K  = numel(pointEst);
 % Example for current 4-param model: [alpha, phi, kstar, k3]
-lb = [0,  -25, -25];   % length must be K
-ub = [1,   25,  25];
+lb = [0,-10,-10,-10,-30];   % length must be K
+ub = [1,10,10,10,30];
 assert(numel(lb)==K && numel(ub)==K, 'lb/ub must have length equal to numel(pointEst).');
 %% -------------------------------------------------------------------------
 
@@ -22,7 +22,7 @@ if projection==1
     tvec  = [1,2,61,93,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
     xdata = 85:tvec(end);
 else
-    tvec  = [1,2,61,94,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
+    tvec  = [1,2,61,91,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
     xdata = 85:tvec(end-7);
 end
 lt    = length(tvec);
@@ -136,28 +136,64 @@ end
 
 
 function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2,plotRun)
-R0=2.2;
-tvec(1)=-145;
+R0=2.8;%2.2;
+tvec(1)=-60;%-70;%-195;%-206;%-195;%Seasonal;-206;%-70;%-85;%-70;%params(2);
 alpha=params([1,1,1]);
+propIn=1;
+%{
 a1=-.814;
 b1=8.0161;
 a2=-.8067;
 b2=-8.0887;
-ks=params(2);%ksrat0=0.1613
-reducedParams=[1,a1*ks+b1,a2*ks+b2,params(3),0];
-[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),reducedParams,coeff,zeros(5,lx2),alpha);
-pr.leak=1;%params(2);
+%}
+%ks=params(2);
+%reducedParams=[1,a1*ks+b1,a2*ks+b2,params(3),0];
+%reducedParams=[1,ks,0,params(2),0];
+reducedParams=[1,params(2:end)];
+%BH
+%Fitting link function:
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),reducedParams,coeff,zeros(5,lx2),alpha,propIn);
+pr.leak=0; pr.xfull=Xfull; be.BiFirstFit=1; pr.phi2=0.1668;
+%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end),0.8036*params(3)-0.3232],coeff,zeros(5,lx2),alpha);
+%Interaction term:
 pr.xfull=Xfull;
+%Fitting individual p's:
+%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,size(Xfull,2)-2),ones(1,3),1,zeros(5,lx2),alpha);%repmat([1,1,params(2:end)]
+%pr.xfull=[1,1,1,params(2:end)];%Use xfull as the value of p
+
+
 Wfit=Xfit.^(1/pr.a);
 if intrinsic==1
+    %Fit to ocupancy:
+    %[simu,~,~]=heRunCovid19(pr,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:numInt+1),0,data);
+    %Fit to admissions:
+    %%BH
+    %Fitting link function:
     [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),plotRun,data);
-else
+    %Fitting individual p's:
+    %[simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),0,data);
 
+else
+    %Fit to ocupancy:
+    %[simu,~,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
+    %Fit to admissions:
     [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
 end
 t=simu(:,1)';
+
+%Fit to ocupancy:
+%h=simu(:,4)';
+%Fit to admissions:
 h=simu2';
+
 f=interp1(t,h,xdata); 
+
+%plot(simu(:,1),simu2);
+%plot(xdata,f)
+
+%f(isinf(f))=-1e6;
+%f(isnan(f))=-1e6;
+
 end
 
 function [a,b,kstar_hat,u,ab_info] = collapse_k1k2(J, idx_k1, idx_k2, v1, v2, p_hat)

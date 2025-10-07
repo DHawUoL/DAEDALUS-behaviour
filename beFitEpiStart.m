@@ -23,72 +23,55 @@ Xfull=Xfull(:,1:lt-1);
 xdata=85:tvec(end);
 ydata=ydata(0+(1:length(xdata)));
 %If data is just England:
-%ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
+ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 
 %%
 fun=@(params,xdata)sim2fit(params,data,xdata,X,intrinsic,Xfull,coeff,tvec,lx1,lx2);
 plot(xdata,[fun(thetaIn,xdata);ydata'])
-%{
-tic
-rng default;%for reproducibility
-options=optimoptions(@lsqcurvefit,'MaxFunctionEvaluations',1e2,'MaxIterations',1e2);
-problem=createOptimProblem('lsqcurvefit','x0',x0,'objective',fun,'xdata',xdata,'ydata',ydata','lb',lb,'ub',ub,'options',options);
-ms=MultiStart;
-[poptim,resnorm]=run(ms,problem,10);
-toc
-Ypred=1;%sim2fit(poptim,data,xdata,X,thetaIn,intrinsic,Xfull);
-delta=1;
-%}
 
-%{
-options = optimoptions(@lsqcurvefit, ...
-    'MaxFunctionEvaluations', 5e3, ...
-    'MaxIterations',  5e3, ...
-    'StepTolerance',  1e-8, ...
-    'FunctionTolerance', 1e-8, ...
-    'FiniteDifferenceType','forward', ...   % less fragile
-    'FiniteDifferenceStepSize', 1e-3);      % don’t poke too hard
-best = inf; best_out = []; poptim=nan(1,5); resnorm=inf;
-for t0i = -90:-74
-  for t1i = 85:97
-    fun2 = @(z,xdata) sim2fit([t0i,t1i,z(1),z(2),z(3)], data, xdata, X, intrinsic, Xfull, coeff, tvec, lx1, lx2);
-    z0  = thetaIn(3:5);%[1.0, 0.5, 0.2];   % [rH, alpha, p1] starts
-    lb  = [0.4, 0.0, 0.0];   ub = [2.5, 1.0, 1.0];
-    %[zhat,~,res,~] = lsqcurvefit(fun2, z0, xdata, ydata', lb, ub, options);
-    if res < best, best = res; poptim=[t0i,t1i,zhat]; resnorm=res; end %best_out = struct('t0',t0i,'t1',t1i,'z',zhat,'res',res); end
-  end
-end
-Ypred=1;
-delta=1;
-%}
-
+% --- options shared across runs
 options_nl = optimoptions(@lsqnonlin, ...
     'MaxFunctionEvaluations',5e3,'MaxIterations',5e3, ...
     'StepTolerance',1e-8,'FunctionTolerance',1e-8, ...
-    'FiniteDifferenceType','forward','FiniteDifferenceStepSize',1e-3, ...
+    'FiniteDifferenceType','forward','FiniteDifferenceStepSize',1e-4, ...
     'Display','off');
 
-best_res = inf; poptim = nan(1,5); best_z = []; best_t0 = NaN; best_t1 = NaN;
+best_res = inf; poptim = nan(1,4); best_z = []; best_t0 = NaN; best_t1 = NaN;
 
-for t0i = -50:-50
+for t0i = -70:-50
   for t1i = 80:100
-    % objective over z = [rH, alpha, p1] with t0,t1 held fixed
-    obj = @(z) resid_peakaware_full([t0i, t1i, z(1), z(2)], ...%, z(3)
+
+    obj = @(z) resid_peakaware_full([t0i, t1i, z(1), z(2)], ...
                                     data, xdata, X, intrinsic, Xfull, coeff, tvec, lx1, lx2, ydata');
 
-    z0 = thetaIn(3:4);              % start for [rH, alpha, p1]
-    lb = [0, 0.0];           % bounds for z
-    ub = [0.4, 1.0];
+    z0 = thetaIn(3:4);
+    lb = [0, 0.0];   ub = [0.4, 1.0];
 
-    % solve (single-start is usually fine here)
-    [zhat,~,resnorm] = lsqnonlin(obj, z0, lb, ub, options_nl);
+    % --- safe tag
+    tag = matlab.lang.makeValidName(sprintf('fit_%d_%d', t0i, t1i));
 
-    if resnorm < best_res
-        best_res = resnorm;
-        best_z   = zhat;
-        best_t0  = t0i; best_t1 = t1i;
-        poptim   = [best_t0, best_t1, best_z(:)'];
+    % init best-so-far with the start point
+    r0 = obj(z0);
+    setappdata(0, [tag '_best_sse'], sum(r0(:).^2));
+    setappdata(0, [tag '_best_z'],   z0);
+
+    opts_here = options_nl;
+    opts_here.OutputFcn = @(z,ov,state) keepbest_ofun(z,ov,state,tag);
+
+    [zhat,~,resnorm] = lsqnonlin(obj, z0, lb, ub, opts_here);
+
+    % substitute best iterate seen
+    best_sse = getappdata(0, [tag '_best_sse']);
+    if ~isempty(best_sse) && isfinite(best_sse) && isfinite(resnorm) && (best_sse < resnorm)
+        zhat    = getappdata(0, [tag '_best_z']);
+        resnorm = best_sse;
     end
+
+    % clean up
+    if isappdata(0, [tag '_best_sse']), rmappdata(0, [tag '_best_sse']); end
+    if isappdata(0, [tag '_best_z']),   rmappdata(0, [tag '_best_z']);   end
+
+    % ... update global best as before ...
   end
 end
 
@@ -163,6 +146,29 @@ end
 function r = resid_peakaware_full(params, data, xdata, Xfit, intrinsic, Xfull, coeff, tvec, lx1, lx2, y)
     [f,~] = sim2fit(params, data, xdata, Xfit, intrinsic, Xfull, coeff, tvec, lx1, lx2);
 
+    % plain residuals on linear scale for SSE:
+    r_ts = f(:) - y(:);
+
+    % turn off peak penalties and extra weights:
+    r = r_ts;   % no timing/height terms, no window weights
+    r(~isfinite(r)) = 0;
+end
+
+function stop = keepbest_ofun(z,optimValues,state,tag)
+stop = false;
+if strcmp(state,'init') || strcmp(state,'iter')
+    best = getappdata(0, [tag '_best_sse']);
+    if isempty(best) || ~isfinite(best) || (optimValues.resnorm < best)
+        setappdata(0, [tag '_best_sse'], optimValues.resnorm);
+        setappdata(0, [tag '_best_z'],   z);
+    end
+end
+end
+
+%{
+function r = resid_peakaware_full(params, data, xdata, Xfit, intrinsic, Xfull, coeff, tvec, lx1, lx2, y)
+    [f,~] = sim2fit(params, data, xdata, Xfit, intrinsic, Xfull, coeff, tvec, lx1, lx2);
+
     % base residuals on log-scale (helps early/late)
     eps0 = 1e-6;
     r_ts = (f-y).^2;%log(max(f,eps0)) - log(max(y,eps0));
@@ -184,3 +190,4 @@ function r = resid_peakaware_full(params, data, xdata, Xfit, intrinsic, Xfull, c
     r = [r_ts; r_peak_t; r_peak_h];
     r(~isfinite(r)) = 0;
 end
+%}

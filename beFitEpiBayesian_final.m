@@ -1,12 +1,12 @@
 function [chains]=beFitEpiBayesian_final(ydata,X,data,Xfull,coeff,Diag)
 filename="chains_blocked1";
-hlag=0;
+hlag=-7;
 plotRun=0;%Plot simulation at x0 - causes an error so a fit doesn't go ahead
 
 %% RUN %%
 
 %Stringency:
-tvec=[1,2,61,94,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
+tvec=[1,2,61,91,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
 xdata=85:tvec(end-15);%-2 -7
 lt=length(tvec);
 X=X(:,1:lt-1);
@@ -18,8 +18,8 @@ ydata=ydata*(sum(data.Npop)/56286961);%England, mid-2019 (ONS)
 
 % From diagnostics / last frequentist fit:
 % ---- 4-parameter model: theta = [alpha, phi, kstar, k3] ----
-lb   = [0,  -20, -20];
-ub   = [1,   20,  20];
+lb   = [0,  -20, -20,  -20];
+ub   = [1,   20,  20,  20];
 plim = [ub; lb];   % 2 x 4
 
 % From diagnostics / last frequentist fit (length must be 4)
@@ -98,38 +98,65 @@ end
 
 %% SIMULATION %%
 
-function [f,rhohat]=sim2fit(params,data,xdata,Xfit,Xfull,coeff,tvec,lx1,lx2,plotRun)
-    % params = [alpha, phi, kstar, k3]
-    R0 = 2.2;
-    tvec(1) = -145;
+function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2,plotRun,ymean)
+R0=2.8;%2.2;
+tvec(1)=-80;%-59;
+alpha=params([1,1,1]);
+propIn=1;
+%reducedParams=[1,params(2:end)];
+reducedParams=[1,params(2),0,params(3:4)];
+%BH
+%Fitting link function:
+[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),reducedParams,coeff,zeros(5,lx2),alpha,propIn);
+pr.leak=0; pr.xfull=Xfull; be.BiFirstFit=1; pr.phi2=0;%.186;
+%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end),0.8036*params(3)-0.3232],coeff,zeros(5,lx2),alpha);
+%Interaction term:
+%{
+delta = params(4);                 % behaviour lead/lag in days
+idx_start = 7;                             % first window to shift
+Xfull_shift = shift_driver_by_days(Xfull, tvec, delta, idx_start, 'previous');
+pr.xfull = Xfull_shift;
+%}
+pr.xfull=Xfull;
+pr.ymean=ymean;
 
-    alpha = params([1,1,1]);   % broadcast into 3-group alpha vector if needed
-    phi   = 1;%params(2);
-    ks    = params(2);
-    k3    = params(3);
+%Fitting individual p's:
+%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,size(Xfull,2)-2),ones(1,3),1,zeros(5,lx2),alpha);%repmat([1,1,params(2:end)]
+%pr.xfull=[1,1,1,params(2:end)];%Use xfull as the value of p
 
-    % --- linear collapse for k1,k2 from k* ---
-    a1=-.814;   b1= 8.0161;
-    a2=-.8067;  b2=-8.0887;
-    k1 = a1*ks + b1;
-    k2 = a2*ks + b2;
 
-    % reducedParams = [1, k1, k2, k3, v0]; here v0=0 after removal
-    reducedParams = [1, k1, k2, k3, 0];
+Wfit=Xfit.^(1/pr.a);
+if intrinsic==1
+    %Fit to ocupancy:
+    %[simu,~,~]=heRunCovid19(pr,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:numInt+1),0,data);
+    %Fit to admissions:
+    %%BH
+    %Fitting link function:
+    [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),plotRun,data);
+    %Fitting individual p's:
+    %[simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),0,data);
 
-    [pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta] = ...
-        bePrepCovid19(data, R0, ones(1,lx2-2), reducedParams, coeff, zeros(5,lx2), alpha);
+else
+    %Fit to ocupancy:
+    %[simu,~,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
+    %Fit to admissions:
+    [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
+end
+t=simu(:,1)';
 
-    pr.leak  = phi;      % implements (1 - phi*p)^2 in your transmission code
-    pr.xfull = Xfull;
+%Fit to ocupancy:
+%h=simu(:,4)';
+%Fit to admissions:
+h=simu2';
 
-    % "intrinsic" fit: all-ones intervention input
-    [simu,simu2,~,rhohat] = beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta, ...
-                                         ones(lx1, length(tvec)-1), tvec(1:lx2+1), plotRun, data);
+f=interp1(t,h,xdata); 
 
-    t = simu(:,1)';
-    h = simu2';                         % admissions
-    f = interp1(t,h,xdata);
+%plot(simu(:,1),simu2);
+%plot(xdata,f)
+
+%f(isinf(f))=-1e6;
+%f(isnan(f))=-1e6;
+
 end
 
 
@@ -245,7 +272,7 @@ function ll = log_like_4(theta, data, xdata, ydata, Xfit, Xfull, coeff, tvec, lx
 end
 %}
 function ll = log_like_4(theta, data, xdata, y, Xfit, Xfull, coeff, tvec, lx1, lx2, plotRun)
-    mu = sim2fit(theta, data, xdata, Xfit, Xfull, coeff, tvec, lx1, lx2, plotRun);
+    mu = sim2fit(theta, data, xdata, Xfit, 1, Xfull, coeff, tvec, lx1, lx2, plotRun, 0);
     mu = mu(:); y = y(:);
     if any(~isfinite(mu)), ll = -Inf; return; end
     mu = max(mu, 1e-8);

@@ -1,5 +1,5 @@
-%function [f,g,tvec,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Xit,tvec,plotTau,data)%,pDeff=Dout.*repmat(NNbar,1,n*na).Xmu/repmatmodIn) %%startOrFull
-function [f,g,tvec,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,Xit,tvec,plotTau,data) %%startOrFull
+function [f,g,tvec,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Xit,tvec,plotTau,data)%,pDeff=Dout.*repmat(NNbar,1,n*na).Xmu/repmatmodIn) %%startOrFull
+%function [f,g,tvec,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,Xit,tvec,plotTau,data) %%startOrFull
 
 pr.Xmu=mean(Xit,2);
 
