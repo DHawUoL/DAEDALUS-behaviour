@@ -1,4 +1,4 @@
-function [tvec,f]=prepFinalIndices(tab,hosp)
+function [tvec,f,means]=prepFinalIndices(tab,hosp)
 monthDur=[1,31,29,31,30,31,30,31,31,30,31,30,31,31,28,31,30,31,30,31,31,30,31,30,31,31];
 monthStart=cumsum(monthDur);
 xlabels={'Jan 20','Mar 20','May 20','Jul 20','Sep 20','Nov20','Jan 21','Mar 21','May 21','Jul 21','Sep 21','Nov21','Jan 22'};
@@ -24,8 +24,25 @@ diffth=diff(tvech);
 hosp=repelem(hval(1:end-1),diffth)/5e3;
 thosp=85:length(hosp)+84;
 
-mat2(1:91,:)=0;
-hosp(thosp<92)=0;
+%Means:
+means=[mean(mat(:,4:58),2)',mean(hval)/5e3];
+
+mat2(1:90,:)=0;
+mat2(91,2)=mat2(92,2);
+hosp(thosp<91)=0;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%{
+%PCA
+x1=mat2(tvec(4:end-7),1);
+x2=mat2(tvec(4:end-7),2);
+%x3=hosp(tvec(4:end-7));
+x12=[x1,x2];
+[coeff,score,latent,tsquared,explained,mu] = pca(x12);
+pc1=(x12-mu)*coeff(:,1);
+pc1=(x12-mu)*coeff(:,2);
+%}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 fs=12; lw=2;
 cmap=lines(7);
@@ -37,7 +54,7 @@ h(1)=plot(mat2(:,1),'-','linewidth',lw,'color',cmap(1,:));
 h(2)=plot(mat2(:,2),'-','linewidth',lw,'color',cmap(2,:));
 h(3)=plot(thosp,hosp,'-','linewidth',lw,'color',cmap(3,:));
 %plot([0,92],[0,0],'k-','linewidth',2)
-plot(92*[1,1],[-1,2],'-','linewidth',lw,'color',.5*[1,1,1])
+plot(91*[1,1],[-1,2],'-','linewidth',lw,'color',.5*[1,1,1])
 plot(474*[1,1],[-1,2],'--','linewidth',lw,'color',.5*[1,1,1])%monthStart(20)
 xticks(monthStart(1:2:end))
 xticklabels(xlabels)
@@ -50,6 +67,8 @@ legend(h,'% "not improving"','Stringency','Hospital admissions/5k (data)','locat
 grid on
 grid minor
 box on
+
+M=mat;
 
 %{
 tvec=table2array(tab(:,1))';

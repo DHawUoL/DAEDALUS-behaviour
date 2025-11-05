@@ -6,7 +6,7 @@ function [chains] = beFitEpiBayesian_final_2(ydata,X,data,Xfull,coeff,Diag)
 % - Blocked, adaptive MH in z-space with logistic box transform
 
 filename = "chains_blocked_ak3v0";
-hlag     = -7;
+hlag     = 0;
 plotRun  = 0;
 
 %% ---- Timeline and data slice ----

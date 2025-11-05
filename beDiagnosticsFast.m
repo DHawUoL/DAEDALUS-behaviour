@@ -1,8 +1,12 @@
-function Diag = beDiagnosticsFast(ydata, X, data, pointEst, Xfull, coeff, paramNames, opts)
+function Diag = beDiagnosticsFast(ydata, data, pointEst, Xfull, paramNames, scheme, tvec, b0, opts)
     % Fast diagnostics: build J by forward differences around pointEst.
     % Keeps the same sim2fit signature you already use.
-    
-    if nargin < 8 || isempty(opts), opts = struct; end
+
+    % ---- Time grid (same as your full fit) ----
+    hlag = 0; projection = 0;
+    xdata=85:tvec(end);
+
+    if nargin < 9 || isempty(opts), opts = struct; end
     ds   = getfielddef(opts,'downsample',1);         % take every ds-th timepoint for J
     par  = getfielddef(opts,'useParallel',false);    % parfor over params
     hrel = getfielddef(opts,'relStep',1e-3);         % relative FD step
@@ -10,20 +14,8 @@ function Diag = beDiagnosticsFast(ydata, X, data, pointEst, Xfull, coeff, paramN
     lb   = getfielddef(opts,'lb',[]);                % optional bounds
     ub   = getfielddef(opts,'ub',[]);
     plotRun = 0;
-    
-    % ---- Time grid (same as your full fit) ----
-    hlag = -7; projection = 0;
-    if projection==1
-        tvec  = [1,2,61,93,134,141,148,155,162,169,176,186,200,211,218,223,227,236,250,258,266,271,279,294,310,322,330,338,349,370,384,397,407,418,433,445,463,468,474,491,504,517,540,561,567,575];
-        xdata = 85:tvec(end);
-    else
-        tvec  = [1,2,61,91,[127,134,141,148,153,155,162,167,169,175,176,186,200,211,216,218,223,227,230,236,250,258,265,266,271,279,288,294,305,310,322,330,337,338,349,354,356,361,370,372,384,397,407,418,433,445,454,463,468,474,491,503,504,517,540,561,566,567,575]+hlag];
-        xdata = 85:tvec(end-7);
-    end
-    lt    = length(tvec);
-    X     = X(:,1:lt-1);
-    Xfull = Xfull(:,1:lt-1);
-    [~,lx2] = size(X);
+
+    [~,lx2] = size(Xfull);
     
     % ---- Data (England scaling) ----
     ydata  = ydata(1:length(xdata));
@@ -33,7 +25,7 @@ function Diag = beDiagnosticsFast(ydata, X, data, pointEst, Xfull, coeff, paramN
     y_ds   = ydata(idxJ);
     
     % ---- Model handle ----
-    fun = @(p) sim2fit(p, data, xdata, X, 1, Xfull, coeff, tvec, size(X,1), lx2, plotRun, ymean); % column out
+    fun = @(p) sim2fit_global(p, data, xdata, 1, Xfull, tvec, lx2, plotRun, ymean, b0); % column out
     
     % ---- Base evaluation at pointEst ----
     p0   = pointEst(:).';
@@ -153,6 +145,39 @@ maxAbsCorr = max(max(abs(R - diag(diag(R)))));
     Diag.ydata       = ydata(:);
     Diag.lb          = lb(:).';
     Diag.ub          = ub(:).';
+
+
+
+
+Diag.scheme   = scheme;                  % 'ols' | 'wls1' | 'wls05' | 'poiss'
+Diag.k        = numel(pointEst);
+Diag.n        = numel(ydata);
+
+% Base errors
+yhat = f0;
+e   = yhat(:) - ydata(:);
+RSS = sum(e.^2);
+WRSS_1  = sum( (1./(1+ydata(:))).*e.^2 );         % for 'wls1'
+WRSS_05 = sum( (1./sqrt(1+ydata(:))).*e.^2 );     % for 'wls05'
+DEV     = 2*sum( max(yhat(:),eps) - ydata(:) + ydata(:).*log( max(ydata(:),eps)./max(yhat(:),eps) ) );
+
+% Store raw fit metrics (useful for diagnostics)
+Diag.RSS      = RSS;
+Diag.WRSS_1   = WRSS_1;
+Diag.WRSS_05  = WRSS_05;
+Diag.DEV      = DEV;
+
+% Information criteria (use scheme-appropriate surrogate for -2 logL)
+switch lower(scheme)
+    case {'ols','wls1','wls05'}
+        n   = Diag.n;
+        ll2 = n*log(RSS/n);     % constants cancel for model comparison on same data
+        Diag.AIC = ll2 + 2*Diag.k;
+        Diag.BIC = ll2 + Diag.k*log(n);
+    case 'poiss'
+        Diag.AIC = DEV + 2*Diag.k;
+        Diag.BIC = DEV + Diag.k*log(Diag.n);
+end
 end
 
 function val = getfielddef(s,fn,def)
@@ -163,32 +188,63 @@ function parfor_k(K,body) % serial fallback for “parfor”
 for k=1:K, body(k); end
 end
 
-function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2,plotRun,ymean)
-R0=2.8;%2.2;
-tvec(1)=-80;%-59;
+function [f,rhohat]=sim2fit(params,data,xdata,Xfit,intrinsic,Xfull,coeff,tvec,lx1,lx2,plotRun,ymean,arg)
+R0=2.8;
+tvec(1)=-80;
 alpha=params([1,1,1]);
 propIn=1;
-%reducedParams=[1,params(2:end)];
-reducedParams=[1,params(2),0,params(3),4.3792];
+if length(params)==5
+    %arg=b0
+    k1=params(2);
+    k2=params(3);
+    k3=params(4);
+    delta=params(5);%delta>eps_safe
+    v0pca=-dot([k1,k2],arg)-delta;
+
+    reducedParams=[1,k1,k2,k3,v0pca];
+    %softplus = @(z) log1p(exp(-abs(z))) + max(z,0);
+    %reducedParams = [1, params(2:4), -softplus(params(5))];
+elseif length(params)==4
+    pc=2;%PC1 OR PC2
+    kstar=params(2);
+    k3=params(3);
+    delta=params(4);%delta>eps_safe
+    v0pca=-kstar*arg(pc)-delta;
+    if pc==1
+        reducedParams=[1,kstar,0,k3,v0pca];   
+    else
+        reducedParams=[1,0,kstar,k3,v0pca];                      
+    end
+elseif length(params)==3
+    pc=2;%PC1 OR PC2
+    kstar=params(2);
+    k3=params(3);
+    delta=16.8943;
+    v0pca=-kstar*arg(pc)-delta;
+    if pc==1
+        reducedParams=[1,kstar,0,k3,v0pca];   
+    else
+        reducedParams=[1,0,kstar,k3,v0pca];                      
+    end
+elseif length(params)==2
+    alpha=0.5832*ones(1,3);
+    pc=2;%PC1 OR PC2
+    kstar=params(1);
+    k3=params(2);
+    delta=16.8943;
+    v0pca=-kstar*arg(pc)-delta;
+    if pc==1
+        reducedParams=[1,kstar,0,k3,v0pca];   
+    else
+        reducedParams=[1,0,kstar,k3,v0pca];                      
+    end
+end
 %BH
 %Fitting link function:
 [pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),reducedParams,coeff,zeros(5,lx2),alpha,propIn);
 pr.leak=0; pr.xfull=Xfull; be.BiFirstFit=1; pr.phi2=0;%.186;
-%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,lx2-2),[params(2:end),0.8036*params(3)-0.3232],coeff,zeros(5,lx2),alpha);
-%Interaction term:
-%{
-delta = params(4);                 % behaviour lead/lag in days
-idx_start = 7;                             % first window to shift
-Xfull_shift = shift_driver_by_days(Xfull, tvec, delta, idx_start, 'previous');
-pr.xfull = Xfull_shift;
-%}
 pr.xfull=Xfull;
 pr.ymean=ymean;
-
-%Fitting individual p's:
-%[pr,be,vx,NN,n,ntot,na,NNbar,NNrep,Dout,beta]=bePrepCovid19(data,R0,ones(1,size(Xfull,2)-2),ones(1,3),1,zeros(5,lx2),alpha);%repmat([1,1,params(2:end)]
-%pr.xfull=[1,1,1,params(2:end)];%Use xfull as the value of p
-
 
 Wfit=Xfit.^(1/pr.a);
 if intrinsic==1
@@ -198,9 +254,6 @@ if intrinsic==1
     %%BH
     %Fitting link function:
     [simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),plotRun,data);
-    %Fitting individual p's:
-    %[simu,simu2,~,rhohat]=beRunCovid19(pr,be,vx,n,NN,NNbar,beta,[ones(1,length(tvec)-1)],tvec(1:lx2+1),0,data);
-
 else
     %Fit to ocupancy:
     %[simu,~,~,rhohat]=beRunCovid19(pr,be,vx,n,ntot,na,NN,NNbar,NNrep,Dout,beta,Wfit,tvec(1:lx2+1),0,data);
@@ -213,13 +266,5 @@ t=simu(:,1)';
 %h=simu(:,4)';
 %Fit to admissions:
 h=simu2';
-
 f=interp1(t,h,xdata); 
-
-%plot(simu(:,1),simu2);
-%plot(xdata,f)
-
-%f(isinf(f))=-1e6;
-%f(isnan(f))=-1e6;
-
 end
